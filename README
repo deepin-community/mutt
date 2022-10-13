@@ -1,0 +1,21 @@
+When updating mutt from an earlier release or from Git, please
+make sure to read the compatibility notes in ``UPDATING''.
+
+Installation instructions are detailed in ``INSTALL''. The user manual
+is in doc/manual.txt. GnuPG users should use the sample configuration in
+contrib/gpg.rc.
+
+Before you start hacking on mutt, read doc/devel-notes.txt.  Before
+applying patches to mutt, read doc/applying-patches.txt.  Please,
+read these files, as they will save you from asking FAQs.
+
+For more information, see the Mutt home page:
+
+ http://www.mutt.org/
+
+The primary distribution points for Mutt is:
+
+ ftp://ftp.mutt.org/pub/mutt
+
+A list of mirror sites can be found under
+<http://www.mutt.org/download.html>.

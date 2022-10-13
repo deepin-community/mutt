@@ -1,0 +1,16 @@
+debian-specific/Muttrc.patch
+debian-specific/882690-use_fqdn_from_etc_mailname.patch
+debian-specific/use_usr_bin_editor.patch
+debian-specific/correct_docdir_in_man_page.patch
+debian-specific/document_debian_defaults.patch
+debian-specific/467432-write_bcc.patch
+debian-specific/566076-build_doc_adjustments.patch
+debian-specific/828751-pinentry-gpg2-support.patch
+debian-specific/530584-default-tmpdir-to-var-tmp.patch
+debian-specific/530584-default-tmpdir-to-var-tmp-docs.patch
+misc/gpg.rc-paths.patch
+misc/smime.rc.patch
+upstream/528233-readonly-open.patch
+upstream/980924-updated-german-translation.patch
+upstream/985152-body-color-slowness.patch
+upstream/Fix-seqset-iterator-when-it-ends-in-a-comma.patch

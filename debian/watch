@@ -1,0 +1,2 @@
+version=3
+opts=pgpsigurlmangle=s/$/.asc/ https://bitbucket.org/mutt/mutt/downloads/mutt-(.*).tar.gz

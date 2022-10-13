@@ -1,0 +1,5 @@
+debian/extra/README.SMIME
+debian/tmp/usr/share/doc/mutt/manual.txt
+debian/tmp/usr/share/doc/mutt/NEWS
+debian/tmp/usr/share/doc/mutt/README.SSL
+debian/tmp/usr/share/doc/mutt/PGP-Notes.txt

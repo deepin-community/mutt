@@ -1,0 +1,48 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: mutt
+Source: http://www.mutt.org/
+
+Files: *
+Copyright: 1996-2002 Brandon Long <blong@fiction.net>
+           1996-2009 Thomas Roessler <roessler@does-not-exist.org>
+           1996-2014 Michael R. Elkins <me@mutt.org>
+           1998-2005 Werner Koch <wk@isil.d.shuttle.de>
+           1999-2002 Tommi Komulainen <Tommi.Komulainen@iki.fi>
+           1999-2014 Brendan Cully <brendan@kublai.com>
+           2000-2003 Vsevolod Volkov <vvv@mutt.org.ua>
+           2000-2004 Edmund Grimley Evans <edmundo@rano.org>
+           2000-2005 Erik Andersen <andersen@uclibc.org>
+           2000 Manoj Kasichainula <manoj@io.com>
+           2001-2002 Mike Schiraldi <raldi@research.netsol.com>
+           2001-2002 Oliver Ehli <elmy@acm.org>
+           2001-2004 Andrew McDonald <andrew@mcdonald.org.uk>
+           2001 Marco d'Itri <md@linux.it>
+           2002-2004 g10 Code GmbH
+           2002 Manuel Novoa III
+           2003 Bjoern Jacke <bjoern@j3e.de>
+           2004-2013 Matthew Wilcox, Honza Horak
+           2004 Brian Fundakowski Feldman <green@FreeBSD.org>
+           2004 Thomas Glanzmann <sithglan@stud.uni-erlangen.de>
+           2004 Tobias Werth <sitowert@stud.uni-erlangen.de>
+           2005-2009 Rocco Rutte <pdmef@gmx.net>
+           2005 Andreas Krennmair <ak@synflood.at>
+           2005 Peter J. Holzer <hjp@hjp.net>
+           2006, 2008 Junio C Hamano
+           2009,2013 Derek Martin <code@pizzashack.org>
+           2013 Honza Horak
+           2014-2016 Kevin J. McCarthy <kevin@8t8.us>
+License: GPL-2+
+
+Files: debian/*
+Copyright: 1999-2004 Marco d'Itri <md@linux.it>
+           2005-2009 Adeodato Simó <dato@net.com.org.es>
+           2006-2016 Christoph Berg <myon@debian.org>
+           2009-2018 Antonio Radici <antonio@dyne.org>
+           2013-2016 Evgeni Golov <evgeni@debian.org>
+           2014-2016 Matteo F. Vescovi <mfv@debian.org>
+           2016 Faidon Liambotis <paravoid@debian.org>
+License: GPL-2+
+
+License: GPL-2+
+ On Debian systems the full text of the GPL-2 can be found in
+  /usr/share/common-licenses/GPL-2

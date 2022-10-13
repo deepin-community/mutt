@@ -1,0 +1,53 @@
+Source: mutt
+Section: mail
+Priority: optional
+Maintainer: Mutt maintainers <mutt@packages.debian.org>
+Uploaders:
+ Antonio Radici <antonio@debian.org>,
+Build-Depends: debhelper-compat (= 12),
+ docbook-xml,
+ docbook-xsl,
+ gawk,
+ gettext,
+ libgnutls28-dev,
+ libgpgme11-dev,
+ libidn2-dev,
+ libkrb5-dev,
+ libncurses5-dev,
+ libncursesw5-dev,
+ libsasl2-dev,
+ libtokyocabinet-dev,
+ pkg-config,
+ w3m,
+ xsltproc,
+ zlib1g-dev
+Standards-Version: 4.5.0
+Rules-Requires-Root: binary-targets
+Vcs-Git: https://salsa.debian.org/mutt-team/mutt.git
+Vcs-Browser: https://salsa.debian.org/mutt-team/mutt
+Homepage: http://www.mutt.org/
+
+Package: mutt
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: locales, mime-support, libsasl2-modules, sensible-utils
+Suggests: default-mta | mail-transport-agent, urlview, aspell | ispell, gnupg, mixmaster, openssl, ca-certificates
+Provides: mail-reader, imap-client
+Description: text-based mailreader supporting MIME, GPG, PGP and threading
+ Mutt is a sophisticated text-based Mail User Agent. Some highlights:
+ .
+  * MIME support (including RFC1522 encoding/decoding of 8-bit message
+    headers and UTF-8 support).
+  * PGP/MIME support (RFC 2015).
+  * Advanced IMAP client supporting SSL encryption and SASL authentication.
+  * POP3 support.
+  * ESMTP support.
+  * Message threading (both strict and non-strict).
+  * Keybindings are configurable, default keybindings are much like ELM;
+    Mush and PINE-like ones are provided as examples.
+  * Handles MMDF, MH and Maildir in addition to regular mbox format.
+  * Messages may be (indefinitely) postponed.
+  * Colour support.
+  * Highly configurable through easy but powerful rc file.
+  * Support for compressed mailboxes.
+  * An optional Sidebar.

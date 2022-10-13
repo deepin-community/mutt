@@ -1,0 +1,2 @@
+rm_conffile /etc/Muttrc.d/sidebar.rc 1.6.2-1~ mutt
+rm_conffile /etc/Muttrc.d/notmuch.rc 1.9.1-3~ mutt
