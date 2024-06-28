@@ -217,6 +217,14 @@ Flags[] =
   { 'S', MUTT_SUPERSEDED, 0, 0,
     /* L10N:
        Pattern Completion Menu description for ~S
+
+       An email header, Supersedes: or Supercedes:, can specify a
+       message-id.  The intent is to say, "the original message with
+       this message-id should be considered incorrect or out of date,
+       and this email should be the actual email."
+
+       The ~S pattern will select those "out of date/incorrect" emails
+       referenced by another email's Supersedes header.
     */
     N_("superseded messages") },
   { 't', MUTT_TO, 0, EAT_REGEXP,
@@ -305,15 +313,14 @@ int mutt_which_case (const char *s)
 {
   wchar_t w;
   mbstate_t mb;
-  size_t l;
+  size_t l, n;
 
   memset (&mb, 0, sizeof (mb));
+  n = mutt_strlen (s);
 
-  for (; (l = mbrtowc (&w, s, MB_CUR_MAX, &mb)) != 0; s += l)
+  for (; n && *s && (l = mbrtowc (&w, s, n, &mb)) != 0; s += l, n -= l)
   {
-    if (l == (size_t) -2)
-      continue; /* shift sequences */
-    if (l == (size_t) -1)
+    if (l == (size_t)(-1) || l == (size_t)(-2))
       return 0; /* error; assume case-sensitive */
     if (iswalpha ((wint_t) w) && iswupper ((wint_t) w))
       return 0; /* case-sensitive */
@@ -330,13 +337,23 @@ msg_search (CONTEXT *ctx, pattern_t* pat, int msgno)
   STATE s;
   struct stat st;
   FILE *fp = NULL;
-  long lng = 0;
+  LOFF_T lng = 0;
   int match = 0;
   HEADER *h = ctx->hdrs[msgno];
   char *buf;
   size_t blen;
 
-  if ((msg = mx_open_message (ctx, msgno)) != NULL)
+  /* The third parameter is whether to download only headers.
+   * When the user has $message_cachedir set, they likely expect to
+   * "take the hit" once and have it be cached than ~h to bypass the
+   * message cache completely, since this was the previous behavior.
+   */
+  if ((msg = mx_open_message (ctx, msgno,
+                              (pat->op == MUTT_HEADER
+#if defined(USE_IMAP) || defined(USE_POP)
+                               && !MessageCachedir
+#endif
+                                ))) != NULL)
   {
     if (option (OPTTHOROUGHSRC))
     {
@@ -372,15 +389,15 @@ msg_search (CONTEXT *ctx, pattern_t* pat, int msgno)
 	  goto cleanup;
 	}
 
-	fseeko (msg->fp, h->offset, 0);
+	fseeko (msg->fp, h->offset, SEEK_SET);
 	mutt_body_handler (h->content, &s);
       }
 
       fp = s.fpout;
       fflush (fp);
-      fseek (fp, 0, 0);
+      fseek (fp, 0, SEEK_SET);
       fstat (fileno (fp), &st);
-      lng = (long) st.st_size;
+      lng = (LOFF_T) st.st_size;
     }
     else
     {
@@ -388,13 +405,13 @@ msg_search (CONTEXT *ctx, pattern_t* pat, int msgno)
       fp = msg->fp;
       if (pat->op != MUTT_BODY)
       {
-	fseeko (fp, h->offset, 0);
+	fseeko (fp, h->offset, SEEK_SET);
 	lng = h->content->offset - h->offset;
       }
       if (pat->op != MUTT_HEADER)
       {
 	if (pat->op == MUTT_BODY)
-	  fseeko (fp, h->content->offset, 0);
+	  fseeko (fp, h->content->offset, SEEK_SET);
 	lng += h->content->length;
       }
     }
@@ -459,7 +476,7 @@ static int msg_search_sendmode (HEADER *h, pattern_t *pat)
                               MUTT_WRITE_HEADER_POSTPONE,
                               0, 0);
     fflush (fp);
-    fseek (fp, 0, 0);
+    fseek (fp, 0, SEEK_SET);
 
     while ((buf = mutt_read_line (buf, &blen, fp, NULL, 0)) != NULL)
     {
@@ -1155,9 +1172,9 @@ pattern_t *mutt_pattern_comp (/* const */ char *s, int flags, BUFFER *err)
   ps.dptr = s;
   ps.dsize = mutt_strlen (s);
 
+  SKIPWS (ps.dptr);
   while (*ps.dptr)
   {
-    SKIPWS (ps.dptr);
     switch (*ps.dptr)
     {
       case '^':
@@ -1365,6 +1382,7 @@ pattern_t *mutt_pattern_comp (/* const */ char *s, int flags, BUFFER *err)
 	mutt_pattern_free (&curlist);
 	return NULL;
     }
+    SKIPWS (ps.dptr);
   }
   if (!curlist)
   {
@@ -1856,7 +1874,7 @@ int mutt_pattern_func (int op, char *prompt)
   BUFFER *buf = NULL;
   char *simple = NULL;
   BUFFER err;
-  int i, rv = -1, padding;
+  int i, rv = -1, padding, interrupted = 0;
   progress_t progress;
 
   buf = mutt_buffer_pool_get ();
@@ -1901,6 +1919,12 @@ int mutt_pattern_func (int op, char *prompt)
 
     for (i = 0; i < Context->msgcount; i++)
     {
+      if (SigInt)
+      {
+        interrupted = 1;
+        SigInt = 0;
+        break;
+      }
       mutt_progress_update (&progress, i, -1);
       /* new limit pattern implicitly uncollapses all threads */
       Context->hdrs[i]->virtual = -1;
@@ -1924,6 +1948,12 @@ int mutt_pattern_func (int op, char *prompt)
   {
     for (i = 0; i < Context->vcount; i++)
     {
+      if (SigInt)
+      {
+        interrupted = 1;
+        SigInt = 0;
+        break;
+      }
       mutt_progress_update (&progress, i, -1);
       if (mutt_pattern_exec (pat, MUTT_MATCH_FULL_ADDRESS, Context, Context->hdrs[Context->v2r[i]], NULL))
       {
@@ -1972,6 +2002,9 @@ int mutt_pattern_func (int op, char *prompt)
       Context->limit_pattern = mutt_pattern_comp (buf->data, MUTT_FULL_MSG, &err);
     }
   }
+
+  if (interrupted)
+    mutt_error _("Search interrupted.");
 
   rv = 0;
 
@@ -2179,7 +2212,7 @@ static void make_pattern_entry (char *s, size_t slen, MUTTMENU *menu, int num)
 		     entry, MUTT_FORMAT_ARROWCURSOR);
 }
 
-static MUTTMENU *create_pattern_menu ()
+static MUTTMENU *create_pattern_menu (void)
 {
   MUTTMENU *menu = NULL;
   PATTERN_ENTRY *entries = NULL;

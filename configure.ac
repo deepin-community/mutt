@@ -12,8 +12,6 @@ AC_SUBST([CONFIG_STATUS_DEPENDENCIES], ['$(top_srcdir)/VERSION'])
 
 AC_USE_SYSTEM_EXTENSIONS
 
-ALL_LINGUAS="de eu ru it es uk fr pl nl cs id sk ko el zh_TW zh_CN pt_BR eo gl sv da lt tr ja hu et ca bg ga fi"
-
 AC_CANONICAL_HOST
 
 AC_MSG_CHECKING([for prefix])
@@ -26,10 +24,10 @@ AC_MSG_RESULT($mutt_cv_prefix)
 
 AC_PROG_CC
 AC_PROG_CC_C99
-AC_SEARCH_LIBS([strerror],[cposix])
-if test "x$U" != "x"; then
-  AC_MSG_ERROR(Compiler not ANSI compliant)
+if test "x$ac_cv_prog_cc_c99" = "xno"; then
+  AC_MSG_ERROR(A C99 compliant compiler is required)
 fi
+AC_SEARCH_LIBS([strerror],[cposix])
 AC_PROG_CPP
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -69,8 +67,6 @@ fi
 
 AC_SUBST([DEBUGGER])
 
-AH_TEMPLATE([sig_atomic_t],
-            [/* Define to `int' if <signal.h> doesn't define.])
 AH_TEMPLATE([HAVE_START_COLOR],
             [Define if you have start_color, as a function or macro.])
 AH_TEMPLATE([HAVE_TYPEAHEAD],
@@ -85,6 +81,12 @@ AH_TEMPLATE([HAVE_USE_DEFAULT_COLORS],
             [Define if you have use_default_colors, as a function or macro.])
 AH_TEMPLATE([HAVE_RESIZETERM],
             [Define if you have resizeterm, as a function or macro.])
+AH_TEMPLATE([HAVE_SETCCHAR],
+            [Define if you have setcchar, as a function or macro.])
+AH_TEMPLATE([HAVE_BKGRNDSET],
+            [Define if you have bkgrndset, as a function or macro.])
+AH_TEMPLATE([HAVE_USE_TIOCTL],
+            [Define if you have use_tioctl, as a function or macro.])
 AH_TEMPLATE([SIG_ATOMIC_VOLATILE_T],
             [Some systems declare sig_atomic_t as volatile, some others -- no.
              This define will have value `sig_atomic_t' or
@@ -178,6 +180,7 @@ fi
 AC_MSG_CHECKING([whether to build with GPGME support])
 if test x"$mutt_enable_gpgme" = xyes; then
    AC_MSG_RESULT(yes)
+   AM_PATH_GPG_ERROR(1.33)
    AM_PATH_GPGME([$mutt_gpgme_version], AC_DEFINE(CRYPT_BACKEND_GPGME, 1,
 		 [Defined, if GPGME support is enabled]),
 		 [gpgme_found=no])
@@ -185,7 +188,6 @@ if test x"$mutt_enable_gpgme" = xyes; then
       AC_MSG_ERROR([*** GPGME not found or version is older than $mutt_gpgme_version ***])
    else
       MUTT_LIB_OBJECTS="$MUTT_LIB_OBJECTS crypt-gpgme.o crypt-mod-pgp-gpgme.o crypt-mod-smime-gpgme.o"
-      AM_PATH_GPG_ERROR(1.33)
    fi
 else
    AC_MSG_RESULT([no])
@@ -215,7 +217,7 @@ if test x$have_smime != xno ; then
 	SMIMEAUX_TARGET="smime_keys"
 fi
 
-AC_ARG_ENABLE(sidebar, AC_HELP_STRING([--enable-sidebar], [Enable Sidebar support]),
+AC_ARG_ENABLE(sidebar, AS_HELP_STRING([--enable-sidebar], [Enable Sidebar support]),
 [       if test x$enableval = xyes ; then
 		AC_DEFINE(USE_SIDEBAR, 1, [Define if you want support for the sidebar.])
 		OPS="$OPS \$(srcdir)/OPS.SIDEBAR"
@@ -223,7 +225,7 @@ AC_ARG_ENABLE(sidebar, AC_HELP_STRING([--enable-sidebar], [Enable Sidebar suppor
         fi
 ])
 
-AC_ARG_ENABLE(compressed, AC_HELP_STRING([--enable-compressed], [Enable compressed folders support]),
+AC_ARG_ENABLE(compressed, AS_HELP_STRING([--enable-compressed], [Enable compressed folders support]),
               enable_compressed=$enableval, enable_compressed=no
 )
 AS_IF([test x$enable_compressed = "xyes"], [
@@ -355,10 +357,12 @@ main ()
                 [CF_CURSES_LIBS])
 		])
 
+        AC_CHECK_HEADERS(term.h)
+
         old_LIBS="$LIBS"
         LIBS="$LIBS $MUTTLIBS"
         CF_CHECK_FUNCDECLS([#include <${cf_cv_ncurses_header-curses.h}>],
-                           [start_color typeahead bkgdset curs_set meta use_default_colors resizeterm])
+                           [start_color typeahead bkgdset curs_set meta use_default_colors resizeterm setcchar bkgrndset use_tioctl])
         if test "$ac_cv_func_decl_start_color" = yes; then
                 AC_DEFINE(HAVE_COLOR,1,[ Define if your curses library supports color. ])
         fi
@@ -368,8 +372,6 @@ main ()
         AC_CHECK_FUNCS([use_extended_names])
         LIBS="$old_LIBS"
         ])
-
-AC_HEADER_STDC
 
 AC_CHECK_HEADERS(stdarg.h sys/ioctl.h ioctl.h sysexits.h)
 AC_CHECK_HEADERS(sys/time.h sys/resource.h)
@@ -395,7 +397,9 @@ AC_EGREP_HEADER(sig_atomic_t,signal.h,
   ],
   [
     AC_MSG_RESULT(no)
-    AC_CHECK_TYPE(sig_atomic_t, int)
+    AC_CHECK_TYPE(sig_atomic_t, [],
+                  [AC_DEFINE([sig_atomic_t], [int],
+                             [Define to `int' if <signal.h> does not define.])])
     is_sig_atomic_t_volatile=no
   ])
 if test $is_sig_atomic_t_volatile = 'yes'
@@ -414,9 +418,11 @@ AC_CHECK_DECLS([sys_siglist],[],[],[#include <signal.h>
 
 
 AC_TYPE_PID_T
-AC_CHECK_TYPE(ssize_t, int)
+AC_CHECK_TYPE(ssize_t, [],
+              [AC_DEFINE([ssize_t], [int],
+                         [Define to `int' if <sys/types.h> does not define.])])
 
-AC_CHECK_FUNCS(fgetpos memmove setegid srand48 strerror)
+AC_CHECK_FUNCS(fgetpos memmove memccpy setegid srand48 strerror)
 
 AC_REPLACE_FUNCS([setenv strcasecmp strdup strsep strtok_r wcscasecmp])
 AC_REPLACE_FUNCS([strcasestr mkdtemp])
@@ -425,65 +431,6 @@ AC_CHECK_FUNC(getopt)
 if test $ac_cv_func_getopt = yes; then
         AC_CHECK_HEADERS(getopt.h)
 fi
-
-SNPRINTFOBJS=""
-AC_CHECK_FUNC(snprintf, [mutt_cv_func_snprintf=yes], [mutt_cv_func_snprintf=no])
-AC_CHECK_FUNC(vsnprintf, [mutt_cv_func_vsnprintf=yes], [mutt_cv_func_vsnprintf=no])
-if test $mutt_cv_func_snprintf = yes; then
-AC_CACHE_CHECK([whether your system's snprintf is C99 compliant],
-        [mutt_cv_c99_snprintf],
-        AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <stdio.h>
-int main()
-{
-changequote(, )dnl
-  char buf[8];
-  int len = snprintf(buf, 4, "1234567");
-  return (len != 7 || buf[3] != '\0');
-changequote([, ])dnl
-}
-        ]])],[mutt_cv_c99_snprintf=yes],[mutt_cv_c99_snprintf=no],[mutt_cv_c99_snprintf=no]))
-else
-        mutt_cv_c99_snprintf=no
-fi
-if test $mutt_cv_func_vsnprintf = yes; then
-AC_CACHE_CHECK([whether your system's vsnprintf is C99 compliant],
-        [mutt_cv_c99_vsnprintf],
-        AC_RUN_IFELSE([AC_LANG_SOURCE([[
-#include <stdarg.h>
-#include <stdio.h>
-int foo(const char *fmt, ...)
-{
-changequote(, )dnl
-  char buf[8];
-  int len;
-  va_list ap;
-  va_start(ap, fmt);
-  len = vsnprintf(buf, 4, fmt, ap);
-  va_end(ap);
-  return (len != 7 || buf[3] != '\0');
-changequote([, ])dnl
-}
-
-int main()
-{
-  return foo("%s", "1234567");
-}
-        ]])],[mutt_cv_c99_vsnprintf=yes],[mutt_cv_c99_vsnprintf=no],[mutt_cv_c99_vsnprintf=no]))
-else
-        mutt_cv_c99_vsnprintf=no
-fi
-if test $mutt_cv_c99_snprintf = yes; then
-        AC_DEFINE(HAVE_SNPRINTF, 1, [ Define to 1 if you have a C99 compliant snprintf function. ])
-fi
-if test $mutt_cv_c99_vsnprintf = yes; then
-        AC_DEFINE(HAVE_VSNPRINTF, 1, [ Define to 1 if you have a C99 compliant vsnprintf function. ])
-fi
-if test $mutt_cv_c99_snprintf = no -o $mutt_cv_c99_vsnprintf = no; then
-        AC_LIBOBJ(snprintf)
-fi
-
-XIPH_FUNC_VA_COPY
 
 dnl SCO uses chsize() instead of ftruncate()
 AC_CHECK_FUNCS(ftruncate, , [AC_CHECK_LIB(x, chsize)])
@@ -742,7 +689,7 @@ then
     if test "$GSSAPI_IMPL" = "none"
     then
       AC_CACHE_SAVE
-      AC_MSG_RESULT([GSSAPI libraries not found])
+      AC_MSG_ERROR([GSSAPI libraries not found])
     fi
     if test "$GSSAPI_IMPL" = "Heimdal"
     then
@@ -906,11 +853,55 @@ AC_ARG_WITH(sasl, AS_HELP_STRING([--with-sasl@<:@=PFX@:>@],[Use SASL network sec
           LIBS="$saved_LIBS"
 
           AC_DEFINE(USE_SASL,1,
-                  [ Define if want to use the SASL library for POP/IMAP authentication. ])
+                  [ Define if want support for SASL. ])
+          AC_DEFINE(USE_SASL_CYRUS,1,
+                  [ Define if want to use the Cyrus SASL library for POP/IMAP authentication. ])
           need_sasl=yes
+          need_sasl_cyrus=yes
         fi
         ])
-AM_CONDITIONAL(USE_SASL, test x$need_sasl = xyes)
+AC_ARG_WITH(gsasl, AS_HELP_STRING([--with-gsasl@<:@=PFX@:>@],[Use GNU SASL network security library]),
+        [
+        if test "$with_gsasl" != "no"
+        then
+          if test "$need_socket" != "yes"
+          then
+            AC_MSG_ERROR([GNU SASL support is only useful with POP or IMAP support])
+          fi
+
+          if test x"$need_sasl" = "xyes"
+          then
+            AC_MSG_ERROR([Both --with-gsasl and --with-sasl can not be enabled at the same time])
+          fi
+
+          if test "$with_gsasl" != "yes"
+          then
+            CPPFLAGS="$CPPFLAGS -I$with_gsasl/include"
+            LDFLAGS="$LDFLAGS -L$with_gsasl/lib"
+          fi
+
+          saved_LIBS="$LIBS"
+          LIBS=
+
+          AC_CHECK_HEADER(gsasl.h,
+              AC_CHECK_LIB(gsasl, gsasl_check_version,,
+                           AC_MSG_ERROR([GNU SASL library not found])),
+              AC_MSG_ERROR([GNU SASL headers not found]))
+
+          MUTTLIBS="$MUTTLIBS -lgsasl"
+          MUTT_LIB_OBJECTS="$MUTT_LIB_OBJECTS mutt_sasl_gnu.o"
+          LIBS="$saved_LIBS"
+
+          AC_DEFINE(USE_SASL,1,
+                  [ Define if want support for SASL. ])
+          AC_DEFINE(USE_SASL_GNU,1,
+                  [ Define if want to use the GNU SASL library for POP/IMAP authentication. ])
+          need_sasl=yes
+          need_sasl_gnu=yes
+        fi
+        ])
+AM_CONDITIONAL(USE_SASL_CYRUS, test x$need_sasl_cyrus = xyes)
+AM_CONDITIONAL(USE_SASL_GNU, test x$need_sasl_gnu = xyes)
 
 dnl -- end socket --
 
@@ -1008,14 +999,13 @@ dnl -- start cache --
 db_found=no
 db_requested=auto
 AC_ARG_ENABLE(hcache, AS_HELP_STRING([--enable-hcache],[Enable header caching]))
-AC_ARG_WITH(tokyocabinet, AS_HELP_STRING([--without-tokyocabinet],[Don't use tokyocabinet even if it is available]))
-AC_ARG_WITH(qdbm, AS_HELP_STRING([--without-qdbm],[Don't use qdbm even if it is available]))
-AC_ARG_WITH(gdbm, AS_HELP_STRING([--without-gdbm],[Don't use gdbm even if it is available]))
-AC_ARG_WITH(bdb, AS_HELP_STRING([--with-bdb@<:@=DIR@:>@],[Use BerkeleyDB4 if gdbm is not available]))
-AC_ARG_WITH(lmdb, AS_HELP_STRING([--with-lmdb@<:@=DIR@:>@],[Use LMDB if gdbm is not available]))
-AC_ARG_WITH(kyotocabinet, AS_HELP_STRING([--with-kyotocabinet@<:@=DIR@:>@],[Use kyotocabinet if gdbm is not available]))
+AC_ARG_WITH(kyotocabinet, AS_HELP_STRING([--with-kyotocabinet@<:@=DIR@:>@],[Use kyotocabinet hcache backend]))
+AC_ARG_WITH(tokyocabinet, AS_HELP_STRING([--with-tokyocabinet@<:@=DIR@:>@],[Use tokyocabinet hcache backend]))
+AC_ARG_WITH(lmdb, AS_HELP_STRING([--with-lmdb@<:@=DIR@:>@],[Use lmdb hcache backend]))
+AC_ARG_WITH(qdbm, AS_HELP_STRING([--with-qdbm@<:@=DIR@:>@],[Use qdbm hcache backend]))
+AC_ARG_WITH(gdbm, AS_HELP_STRING([--with-gdbm@<:@=DIR@:>@],[Use gdbm hcache backend]))
+AC_ARG_WITH(bdb, AS_HELP_STRING([--with-bdb@<:@=DIR@:>@],[Use bdb hcache backend]))
 
-db_found=no
 if test x$enable_hcache = xyes
 then
     AC_DEFINE(USE_HCACHE, 1, [Enable header caching])
@@ -1027,9 +1017,32 @@ then
 
     need_md5="yes"
 
+    if test -n "$with_kyotocabinet" && test "$with_kyotocabinet" != "no"
+    then
+      if test "$db_requested" != "auto"
+      then
+        AC_MSG_ERROR([more than one header cache engine requested.])
+      else
+        db_requested=kc
+      fi
+    fi
     if test -n "$with_tokyocabinet" && test "$with_tokyocabinet" != "no"
     then
-      db_requested=tc
+      if test "$db_requested" != "auto"
+      then
+        AC_MSG_ERROR([more than one header cache engine requested.])
+      else
+        db_requested=tc
+      fi
+    fi
+    if test -n "$with_lmdb" && test "$with_lmdb" != "no"
+    then
+      if test "$db_requested" != "auto"
+      then
+        AC_MSG_ERROR([more than one header cache engine requested.])
+      else
+        db_requested=lmdb
+      fi
     fi
     if test -n "$with_qdbm" && test "$with_qdbm" != "no"
     then
@@ -1058,27 +1071,32 @@ then
         db_requested=bdb
       fi
     fi
-    if test -n "$with_lmdb" && test "$with_lmdb" != "no"
+
+    dnl -- Kyoto Cabinet --
+    if test x$with_kyotocabinet != xno && test $db_found = no \
+	    && test "$db_requested" = auto -o "$db_requested" = kc
     then
-      if test "$db_requested" != "auto"
+      if test -n "$with_kyotocabinet" && test "$with_kyotocabinet" != "yes"
       then
-        AC_MSG_ERROR([more than one header cache engine requested.])
-      else
-        db_requested=lmdb
+        CPPFLAGS="$CPPFLAGS -I$with_kyotocabinet/include"
+        LDFLAGS="$LDFLAGS -L$with_kyotocabinet/lib"
       fi
-    fi
-    if test -n "$with_kyotocabinet" && test "$with_kyotocabinet" != "no"
-    then
-      if test "$db_requested" != "auto"
+
+      AC_CHECK_HEADER(kclangc.h,
+      AC_CHECK_LIB(kyotocabinet, kcdbopen,
+        [MUTTLIBS="$MUTTLIBS -lkyotocabinet"
+         AC_DEFINE(HAVE_KC, 1, [Kyoto Cabinet Support])
+         db_found=kc],
+        [CPPFLAGS="$OLDCPPFLAGS"
+         LDFLAGS="$OLDLDFLAGS"]))
+      if test "$db_requested" != auto && test "$db_found" != "$db_requested"
       then
-        AC_MSG_ERROR([more than one header cache engine requested.])
-      else
-        db_requested=kc
+        AC_MSG_ERROR([Kyoto Cabinet could not be used. Check config.log for details.])
       fi
     fi
 
     dnl -- Tokyo Cabinet --
-    if test "$with_tokyocabinet" != "no" \
+    if test "x$with_tokyocabinet" != "xno" && test $db_found = no \
 	    && test "$db_requested" = auto -o "$db_requested" = tc
     then
       if test -n "$with_tokyocabinet" && test "$with_tokyocabinet" != "yes"
@@ -1098,6 +1116,34 @@ then
       then
         AC_MSG_ERROR([Tokyo Cabinet could not be used. Check config.log for details.])
       fi
+    fi
+
+    dnl -- LMDB --
+    if test x$with_lmdb != xno && test $db_found = no \
+	    && test "$db_requested" = auto -o "$db_requested" = lmdb
+    then
+        if test -n "$with_lmdb" && test "$with_lmdb" != "yes"
+        then
+          CPPFLAGS="$CPPFLAGS -I$with_lmdb/include"
+          LDFLAGS="$LDFLAGS -L$with_lmdb/lib"
+        fi
+        saved_LIBS="$LIBS"
+        LIBS="$LIBS -llmdb"
+        AC_CACHE_CHECK(for mdb_env_create, ac_cv_mdbenvcreate,[
+            ac_cv_mdbenvcreate=no
+            AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <lmdb.h>]], [[mdb_env_create(0);]])],[ac_cv_mdbenvcreate=yes],[])
+        ])
+        LIBS="$saved_LIBS"
+        if test "$ac_cv_mdbenvcreate" = yes
+        then
+          AC_DEFINE(HAVE_LMDB, 1, [LMDB Support])
+          MUTTLIBS="$MUTTLIBS -llmdb"
+          db_found=lmdb
+        fi
+        if test "$db_requested" != auto && test "$db_found" != "$db_requested"
+        then
+          AC_MSG_ERROR([LMDB could not be used. Check config.log for details.])
+        fi
     fi
 
     dnl -- QDBM --
@@ -1137,7 +1183,7 @@ then
     if test x$with_gdbm != xno && test $db_found = no \
 	    && test "$db_requested" = auto -o "$db_requested" = gdbm
     then
-        if test "$with_gdbm" != "yes"
+        if test -n "$with_gdbm" && test "$with_gdbm" != "yes"
         then
           CPPFLAGS="$CPPFLAGS -I$with_gdbm/include"
           LDFLAGS="$LDFLAGS -L$with_gdbm/lib"
@@ -1162,118 +1208,43 @@ then
     fi
 
     dnl -- BDB --
-    ac_bdb_prefix="$with_bdb"
     if test x$with_bdb != xno && test $db_found = no \
 	    && test "$db_requested" = auto -o "$db_requested" = bdb
     then
-        if test x$ac_bdb_prefix = xyes || test x$ac_bdb_prefix = x
+        if test -n "$with_bdb" && test "$with_bdb" != "yes"
         then
-          ac_bdb_prefix="$mutt_cv_prefix /opt/csw/bdb4 /opt /usr/local /usr"
-        fi
-        for d in $ac_bdb_prefix; do
-            bdbpfx="$bdbpfx $d"
-            for v in BerkeleyDB.4.3 BerkeleyDB.4.2 BerkeleyDB.4.1; do
-                bdbpfx="$bdbpfx $d/$v"
-            done
-        done
-        BDB_VERSIONS="db-4 db4 db-6 db6 db-6.2 db6.2 db62 db-6.1 db6.1 db61 db-6.0 db6.0 db60 db-5 db5 db-5.3 db5.3 db53 db-5.2 db5.2 db52 db-5.1 db5.1 db51 db-5.0 db5.0 db50 db-4.8 db4.8 db48 db-4.7 db4.7 db47 db-4.6 db4.6 db46 db-4.5 db4.5 db45 db-4.4 db4.4 db44 db-4.3 db4.3 db43 db-4.2 db4.2 db42 db-4.1 db4.1 db41 db ''"
-        AC_MSG_CHECKING([for BerkeleyDB > 4.0])
-        for d in $bdbpfx; do
-            BDB_INCLUDE_DIR=""
-            BDB_LIB_DIR=""
-            for v in / $BDB_VERSIONS; do
-                if test -r "$d/include/$v/db.h"; then
-                    BDB_INCLUDE_DIR="$d/include/$v"
-                    for bdblibdir in "$d/lib/$v" "$d/lib"; do
-                        test -d "$bdblibdir" || continue
-                        BDB_LIB_DIR="$bdblibdir"
-                        for l in `echo $BDB_VERSIONS`; do
-                            CPPFLAGS="$OLDCPPFLAGS -I$BDB_INCLUDE_DIR"
-                            LIBS="$OLDLIBS -L$BDB_LIB_DIR -l$l"
-                            AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-                                #include <stdlib.h>
-                                #include <db.h>
-                            ]], [[
-                                DB *db = NULL;
-                                db->open(db,NULL,NULL,NULL,0,0,0);
-                            ]])],[
-                                ac_cv_dbcreate=yes
-                                BDB_LIB="$l"
-                                break
-                            ],[])
-                        done
-                        test x$ac_cv_dbcreate = xyes && break 2
-                    done
-                fi
-            done
-            test x$BDB_LIB != x && break
-        done
-        if test x$ac_cv_dbcreate = xyes
-        then
-            AC_MSG_RESULT(yes)
-            CPPFLAGS="$OLDCPPFLAGS -I$BDB_INCLUDE_DIR"
-            LIBS="$OLDLIBS -L$BDB_LIB_DIR -l$BDB_LIB"
-            AC_DEFINE(HAVE_DB4, 1, [Berkeley DB4 Support])
-            db_found=bdb
-        else
-            AC_MSG_RESULT(no)
-        fi
-    fi
-
-    dnl -- LMDB --
-    if test x$with_lmdb != xno && test $db_found = no \
-	    && test "$db_requested" = auto -o "$db_requested" = lmdb
-    then
-        if test "$with_lmdb" != "yes"
-        then
-          CPPFLAGS="$CPPFLAGS -I$with_lmdb/include"
-          LDFLAGS="$LDFLAGS -L$with_lmdb/lib"
+          CPPFLAGS="$CPPFLAGS -I$with_bdb/include"
+          LDFLAGS="$LDFLAGS -L$with_bdb/lib"
         fi
         saved_LIBS="$LIBS"
-        LIBS="$LIBS -llmdb"
-        AC_CACHE_CHECK(for mdb_env_create, ac_cv_mdbenvcreate,[
-            ac_cv_mdbenvcreate=no
-            AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <lmdb.h>]], [[mdb_env_create(0);]])],[ac_cv_mdbenvcreate=yes],[])
-        ])
+        LIBS="$LIBS -ldb"
+        AC_CACHE_CHECK([for BDB > 4.0], ac_cv_dbcreate, [
+          ac_cv_dbcreate=no
+          AC_LINK_IFELSE([AC_LANG_PROGRAM([[
+                          #include <stdlib.h>
+                          #include <db.h>
+                          ]], [[
+                          DB *db = NULL;
+                          db->open(db,NULL,NULL,NULL,0,0,0);
+                          ]])],[ac_cv_dbcreate=yes],[])
+
+          ])
         LIBS="$saved_LIBS"
-        if test "$ac_cv_mdbenvcreate" = yes
+        if test "x$ac_cv_dbcreate" = "xyes"
         then
-          AC_DEFINE(HAVE_LMDB, 1, [LMDB Support])
-          MUTTLIBS="$MUTTLIBS -llmdb"
-          db_found=lmdb
+            AC_DEFINE(HAVE_DB4, 1, [Berkeley DB4 Support])
+            MUTTLIBS="$MUTTLIBS -ldb"
+            db_found=bdb
         fi
         if test "$db_requested" != auto && test "$db_found" != "$db_requested"
         then
-          AC_MSG_ERROR([LMDB could not be used. Check config.log for details.])
+          AC_MSG_ERROR([BDB could not be used. Check config.log for details.])
         fi
-    fi
-
-    dnl -- Kyoto Cabinet --
-    if test x$with_kyotocabinet != xno && test $db_found = no \
-	    && test "$db_requested" = auto -o "$db_requested" = kc
-    then
-      if test -n "$with_kyotocabinet" && test "$with_kyotocabinet" != "yes"
-      then
-        CPPFLAGS="$CPPFLAGS -I$with_kyotocabinet/include"
-        LDFLAGS="$LDFLAGS -L$with_kyotocabinet/lib"
-      fi
-
-      AC_CHECK_HEADER(kclangc.h,
-      AC_CHECK_LIB(kyotocabinet, kcdbopen,
-        [MUTTLIBS="$MUTTLIBS -lkyotocabinet"
-         AC_DEFINE(HAVE_KC, 1, [Kyoto Cabinet Support])
-         db_found=kc],
-        [CPPFLAGS="$OLDCPPFLAGS"
-         LDFLAGS="$OLDLDFLAGS"]))
-      if test "$db_requested" != auto && test "$db_found" != "$db_requested"
-      then
-        AC_MSG_ERROR([Kyoto Cabinet could not be used. Check config.log for details.])
-      fi
     fi
 
     if test $db_found = no
     then
-        AC_MSG_ERROR([You need Tokyo Cabinet, Kyoto Cabinet, QDBM, GDBM, LMDB or Berkeley DB4 for hcache])
+        AC_MSG_ERROR([You need Kyoto Cabinet, Tokyo Cabinet, LMDB, QDBM, GDBM, or BDB for hcache])
     fi
 fi
 dnl -- end cache --
@@ -1298,7 +1269,8 @@ AC_ARG_ENABLE(iconv, AS_HELP_STRING([--disable-iconv],[Disable iconv support]),
         fi
 ])
 
-MUTT_AM_GNU_GETTEXT
+AM_GNU_GETTEXT([external])
+AM_ICONV
 
 if test "$am_cv_func_iconv" != "yes"
 then
@@ -1372,17 +1344,10 @@ else
   AC_DEFINE(ICONV_NONTRANS, 0)
 fi
 
-CPPFLAGS="$CPPFLAGS -I\$(top_srcdir)/intl"
-
-if test "$BUILD_INCLUDED_LIBINTL" = "yes"; then
-  AC_DEFINE(HAVE_BIND_TEXTDOMAIN_CODESET,1,
-          [ Define if your gettext has bind_textdomain_codeset. ])
-else
-  mutt_save_LIBS="$LIBS"
-  LIBS="$LIBS $INTLLIBS"
-  AC_CHECK_FUNCS(bind_textdomain_codeset)
-  LIBS="$mutt_save_LIBS"
-fi
+mutt_save_LIBS="$LIBS"
+LIBS="$LIBS $LIBINTL"
+AC_CHECK_FUNCS(bind_textdomain_codeset)
+LIBS="$mutt_save_LIBS"
 
 fi # libiconv
 
@@ -1673,6 +1638,6 @@ if test x$full_doc != xno ; then
 fi
 
 AC_CONFIG_FILES(Makefile contrib/Makefile doc/Makefile imap/Makefile
-        intl/Makefile m4/Makefile po/Makefile.in autocrypt/Makefile
+        m4/Makefile po/Makefile.in autocrypt/Makefile
         doc/instdoc.sh)
 AC_OUTPUT

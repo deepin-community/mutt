@@ -651,7 +651,12 @@ CONTEXT *mx_open_mailbox (const char *path, int flags, CONTEXT *pctx)
   set_option (OPTFORCEREFRESH);
 
   if (!ctx->quiet)
-    mutt_message (_("Reading %s..."), ctx->path);
+  {
+    BUFFER *clean = mutt_buffer_pool_get ();
+    mutt_buffer_remove_path_password (clean, ctx->path);
+    mutt_message (_("Reading %s..."), mutt_b2s (clean));
+    mutt_buffer_pool_release (&clean);
+  }
 
   rc = ctx->mx_ops->open(ctx);
 
@@ -744,22 +749,28 @@ void mx_fastclose_mailbox (CONTEXT *ctx)
 static int sync_mailbox (CONTEXT *ctx, int *index_hint)
 {
   int rc;
+  BUFFER *clean;
 
   if (!ctx->mx_ops || !ctx->mx_ops->sync)
     return -1;
 
+  clean = mutt_buffer_pool_get ();
+  mutt_buffer_remove_path_password (clean, ctx->path);
+
   if (!ctx->quiet)
   {
     /* L10N: Displayed before/as a mailbox is being synced */
-    mutt_message (_("Writing %s..."), ctx->path);
+    mutt_message (_("Writing %s..."), mutt_b2s (clean));
   }
 
   rc = ctx->mx_ops->sync (ctx, index_hint);
   if (rc != 0 && !ctx->quiet)
   {
     /* L10N: Displayed if a mailbox sync fails */
-    mutt_error (_("Unable to write %s!"), ctx->path);
+    mutt_error (_("Unable to write %s!"), mutt_b2s (clean));
   }
+
+  mutt_buffer_pool_release (&clean);
 
   return rc;
 }
@@ -816,6 +827,11 @@ static int trash_append (CONTEXT *ctx)
         if (mutt_append_message (&ctx_trash, ctx, ctx->hdrs[i], 0, 0) == -1)
         {
           mx_close_mailbox (&ctx_trash, NULL);
+          /* L10N:
+             Displayed if appending to $trash fails when syncing or closing
+             a mailbox.
+          */
+          mutt_error _("Unable to append to trash folder");
           return -1;
         }
       }
@@ -1061,7 +1077,8 @@ int mx_close_mailbox (CONTEXT *ctx, int *index_hint)
     mx_unlink_empty (ctx->path);
 
 #ifdef USE_SIDEBAR
-  if (purge && ctx->deleted)
+  if (purge && ctx->deleted &&
+      !(ctx->magic == MUTT_MAILDIR && option (OPTMAILDIRTRASH)))
   {
     int orig_msgcount = ctx->msgcount;
 
@@ -1099,6 +1116,7 @@ void mx_update_tables(CONTEXT *ctx, int committing)
   ctx->vsize = 0;
   ctx->tagged = 0;
   ctx->deleted = 0;
+  ctx->trashed = 0;
   ctx->new = 0;
   ctx->unread = 0;
   ctx->changed = 0;
@@ -1137,6 +1155,8 @@ void mx_update_tables(CONTEXT *ctx, int committing)
       {
 	if (ctx->hdrs[j]->deleted)
 	  ctx->deleted++;
+        if (ctx->hdrs[j]->trash)
+          ctx->trashed++;
       }
 
       if (ctx->hdrs[j]->tagged)
@@ -1216,7 +1236,7 @@ int mx_sync_mailbox (CONTEXT *ctx, int *index_hint)
     return (0);
   }
 
-  if (ctx->deleted)
+  if (ctx->deleted && !(ctx->magic == MUTT_MAILDIR && option (OPTMAILDIRTRASH)))
   {
     char buf[SHORT_STRING];
 
@@ -1359,7 +1379,8 @@ MESSAGE *mx_open_new_message (CONTEXT *dest, HEADER *hdr, int flags)
 	  p = hdr->env->from;
       }
 
-      fprintf (msg->fp, "From %s %s", p ? p->mailbox : NONULL(Username), ctime (&msg->received));
+      fprintf (msg->fp, "From %s %s", p ? p->mailbox : NONULL(Username),
+               mutt_ctime (&msg->received));
     }
   }
   else
@@ -1380,8 +1401,12 @@ int mx_check_mailbox (CONTEXT *ctx, int *index_hint)
   return ctx->mx_ops->check (ctx, index_hint);
 }
 
-/* return a stream pointer for a message */
-MESSAGE *mx_open_message (CONTEXT *ctx, int msgno)
+/* return a stream pointer for a message.
+ *
+ * if headers is set, some backends will only download and return the
+ * message headers.
+ */
+MESSAGE *mx_open_message (CONTEXT *ctx, int msgno, int headers)
 {
   MESSAGE *msg;
 
@@ -1392,7 +1417,7 @@ MESSAGE *mx_open_message (CONTEXT *ctx, int msgno)
   }
 
   msg = safe_calloc (1, sizeof (MESSAGE));
-  if (ctx->mx_ops->open_msg (ctx, msg, msgno))
+  if (ctx->mx_ops->open_msg (ctx, msg, msgno, headers))
     FREE (&msg);
 
   return msg;
@@ -1525,6 +1550,8 @@ void mx_update_context (CONTEXT *ctx, int new_messages)
       ctx->flagged++;
     if (h->deleted)
       ctx->deleted++;
+    if (h->trash)
+      ctx->trashed++;
     if (!h->read)
     {
       ctx->unread++;

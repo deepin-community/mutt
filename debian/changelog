@@ -1,3 +1,85 @@
+mutt (2.2.12-0.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * New upstream release (Closes: #1051563).
+    - CVE-2023-4874 ("Null pointer dereference when viewing a specially
+      crafted email).
+    - CVE-2023-4875 ("Null pointer dereference when composing from a specially
+      crafted draft message").
+
+ -- Sebastian Andrzej Siewior <sebastian@breakpoint.cc>  Sun, 10 Sep 2023 12:21:34 +0200
+
+mutt (2.2.7-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/control: Standards-Version upgraded to 4.6.1, no changes needed.
+  * debian/mutt.lintian-overrides:
+    + s/setgid-binary/elevated-priviliges due to the new lintian override
+      name
+    + missing-sources overridden for .html files.
+
+ -- Antonio Radici <antonio@debian.org>  Sat, 03 Sep 2022 13:43:03 +0200
+
+mutt (2.2.6-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Antonio Radici <antonio@debian.org>  Sat, 09 Jul 2022 06:52:56 +0200
+
+mutt (2.2.4-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Antonio Radici <antonio@debian.org>  Sun, 08 May 2022 18:31:32 +0200
+
+mutt (2.2.3-2) unstable; urgency=medium
+
+  * Replace cyrus-sasl with gsasl (Closes: #999672)
+    + patch provided by Bastian Germann (<bage@debian.org>).
+
+ -- Antonio Radici <antonio@debian.org>  Wed, 27 Apr 2022 09:52:31 +0200
+
+mutt (2.2.3-1) unstable; urgency=medium
+
+  * New upstream release.
+    + includes fix for CVE-2022-1328.
+  * debian/patches:
+    + all refreshed.
+    + removed upstream/1001013-smtp-auth-regression.patch, already upstream.
+
+ -- Antonio Radici <antonio@debian.org>  Fri, 15 Apr 2022 23:17:39 +0200
+
+mutt (2.1.4-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/patches:
+    + upstream/1001013-smtp-auth-regression.patch: removes a regression where
+      SMTP auth is mandated if available (Closes: 1001013).
+  * debian/control:
+    + removed dependency on mixmaster, removed from archives long time ago.
+    + s/mime-support/mailcap, as mime-support is now a transition package
+     (Closes: 979020).
+
+ -- Antonio Radici <antonio@debian.org>  Wed, 15 Dec 2021 09:35:18 +0100
+
+mutt (2.1.3-1) unstable; urgency=medium
+
+  * Latest upstream release
+    + contains the fix for a potential data-loss IMAP bug (Closes: 992927)
+    + debian/patches:
+      - removed the following patches already upstream:
+        * upstream/980924-updated-german-translation.patch
+        * upstream/985152-body-color-slowness.patch
+        * upstream/Fix-seqset-iterator-when-it-ends-in-a-comma.patch
+      - All patches refreshed
+   * debian/control:
+     + Standards-Version updated from 4.5.0 to 4.6.0.1, no changes needed.
+   * debian/watch: version updated from 3 to 4, no changes needed.
+   * debian/source/lintian-overrides: removed testsuite-autopkgtest-missing,
+     not needed.
+
+ -- Antonio Radici <antonio@debian.org>  Sat, 27 Nov 2021 14:05:57 +0100
+
 mutt (2.0.5-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.

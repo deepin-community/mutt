@@ -105,7 +105,7 @@ static int mutt_poll_fd_remove(int fd)
   return 0;
 }
 
-static int monitor_init ()
+static int monitor_init (void)
 {
   if (INotifyFd == -1)
   {
@@ -132,7 +132,7 @@ static int monitor_init ()
   return 0;
 }
 
-static void monitor_check_free ()
+static void monitor_check_free (void)
 {
   if (!Monitor && INotifyFd != -1)
   {
@@ -256,7 +256,7 @@ int mutt_monitor_poll (void)
 
   if (INotifyFd != -1)
   {
-    fds = poll (PollFds, PollFdsLen, MuttGetchTimeout);
+    fds = poll (PollFds, PollFdsCount, MuttGetchTimeout);
 
     if (fds == -1)
     {

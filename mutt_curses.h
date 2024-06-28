@@ -33,13 +33,6 @@
 #define KEY_DC SL_KEY_DELETE
 #define KEY_IC SL_KEY_IC
 
-/*
- * ncurses and SLang seem to send different characters when the Enter key is
- * pressed, so define some macros to properly detect the Enter key.
- */
-#define MUTT_ENTER_C '\r'
-#define MUTT_ENTER_S "\r"
-
 #else /* USE_SLANG_CURSES */
 
 #if HAVE_NCURSESW_NCURSES_H
@@ -52,17 +45,19 @@
 # include <curses.h>
 #endif
 
-#define MUTT_ENTER_C '\n'
-#define MUTT_ENTER_S "\n"
-
 #endif /* USE_SLANG_CURSES */
 
-/* AIX defines ``lines'' in <term.h>, but it's used as a var name in
- * various places in Mutt
+/* Some older platforms include <term.h> when curses.h is included.
+ * ``lines'' and ``columns'' are #defined there, but are also used
+ * as a var name in various places in Mutt.
  */
 #ifdef lines
 #undef lines
 #endif /* lines */
+
+#ifdef columns
+#undef columns
+#endif /* columns */
 
 #define CLEARLINE(win,x) mutt_window_clearline(win, x)
 #define CENTERLINE(win,x,y) mutt_window_move(win, y, (win->cols-strlen(x))/2), addstr(x)
@@ -151,12 +146,17 @@ typedef struct color_line
                                calculation */
   short fg;
   short bg;
-  int pair;
+  COLOR_ATTR color;
   struct color_line *next;
+
+  regoff_t cached_rm_so;
+  regoff_t cached_rm_eo;
 
   unsigned int stop_matching : 1; /* used by the pager for body patterns,
                                      to prevent the color from being retried
                                      once it fails. */
+  unsigned int cached : 1; /* indicates cached_rm_so and cached_rm_eo
+                            * hold the last match location */
 } COLOR_LINE;
 
 #define MUTT_PROGRESS_SIZE      (1<<0)  /* traffic-based progress */
@@ -220,53 +220,50 @@ static inline int mutt_window_wrap_cols(mutt_window_t *win, short wrap)
     return win->cols;
 }
 
-extern int *ColorQuote;
+extern COLOR_ATTR *ColorQuote;
 extern int ColorQuoteUsed;
-extern int ColorDefs[];
+extern COLOR_ATTR ColorDefs[];
 extern COLOR_LINE *ColorHdrList;
 extern COLOR_LINE *ColorBodyList;
 extern COLOR_LINE *ColorIndexList;
 
-void ci_init_color (void);
 void ci_start_color (void);
+
+/* Prefer bkgrndset because it allows more color pairs to be used.
+ * COLOR_PAIR() returns at most 8-bits.
+ */
+#if defined(HAVE_COLOR) && defined(HAVE_SETCCHAR) && defined(HAVE_BKGRNDSET)
+static inline void ATTRSET (const COLOR_ATTR X)
+{
+  cchar_t cch;
+  setcchar(&cch, L" ", X.attrs, X.pair, NULL);
+  bkgrndset(&cch);
+}
 
 /* If the system has bkgdset() use it rather than attrset() so that the clr*()
  * functions will properly set the background attributes all the way to the
  * right column.
  */
-#if defined(HAVE_BKGDSET)
-#define SETCOLOR(X) bkgdset(ColorDefs[X] | ' ')
-#define ATTRSET(X) bkgdset(X | ' ')
+#elif defined(HAVE_BKGDSET) && defined(HAVE_COLOR)
+#define ATTRSET(X) bkgdset(COLOR_PAIR(X.pair) | X.attrs | ' ')
+
+#elif defined(HAVE_BKGDSET)
+#define ATTRSET(X) bkgdset(X.attrs | ' ')
+
+#elif defined (HAVE_COLOR)
+#define ATTRSET(X) attrset(COLOR_PAIR(X.pair) | X.attrs)
+
 #else
-#define SETCOLOR(X) attrset(ColorDefs[X])
-#define ATTRSET attrset
+#define ATTRSET(X) attrset(X.attrs)
 #endif
+
+#define SETCOLOR(X) ATTRSET(ColorDefs[X])
 
 /* reset the color to the normal terminal color as defined by 'color normal ...' */
 #define NORMAL_COLOR SETCOLOR(MT_COLOR_NORMAL)
 
-/* ----------------------------------------------------------------------------
- * These are here to avoid compiler warnings with -Wall under SunOS 4.1.x
- */
-
-#if !defined(STDC_HEADERS) && !defined(NCURSES_VERSION) && !defined(USE_SLANG_CURSES)
-extern int endwin();
-extern int printw();
-extern int beep();
-extern int isendwin();
-extern int w32addch();
-extern int keypad();
-extern int wclrtobot();
-extern int mvprintw();
-extern int getcurx();
-extern int getcury();
-extern int noecho();
-extern int wdelch();
-extern int wrefresh();
-extern int wmove();
-extern int wclear();
-extern int waddstr();
-extern int wclrtoeol();
-#endif
+/* curs_ti_lib.c routines: */
+const char *mutt_tigetstr (const char *capname);
+int mutt_tigetflag (const char *capname);
 
 #endif /* _MUTT_CURSES_H_ */

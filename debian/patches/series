@@ -11,6 +11,3 @@ debian-specific/530584-default-tmpdir-to-var-tmp-docs.patch
 misc/gpg.rc-paths.patch
 misc/smime.rc.patch
 upstream/528233-readonly-open.patch
-upstream/980924-updated-german-translation.patch
-upstream/985152-body-color-slowness.patch
-upstream/Fix-seqset-iterator-when-it-ends-in-a-comma.patch

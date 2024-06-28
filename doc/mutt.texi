@@ -103,6 +103,7 @@ Advanced Usage
 * Start a WWW Browser on URLs::
 * Echoing Text::
 * Message Composition Flow::
+* Batch Composition Flow::
 * Using MuttLisp (EXPERIMENTAL): Using MuttLisp [EXPERIMENTAL].
 * Miscellany::
 
@@ -234,7 +235,7 @@ at @uref{https://gitlab.com/muttmua/mutt/wikis/home,https://gitlab.com/muttmua/m
 
 @item IRC
 For the IRC user community, visit channel @emph{#mutt} on
-@uref{http://www.freenode.net/,irc.freenode.net}.
+@uref{https://libera.chat/,irc.libera.chat}.
 
 @item USENET
 For USENET, see the newsgroup @uref{news:comp.mail.mutt,comp.mail.mutt}.
@@ -301,7 +302,7 @@ denote that the argument may be repeated arbitrary times.
 @node Copyright, , Typographical Conventions, Introduction
 @section Copyright
 
-Mutt is Copyright © 1996-2021 Michael R. Elkins
+Mutt is Copyright © 1996-2023 Michael R. Elkins
 @email{me@@mutt.org} and others.
 
 This program is free software; you can redistribute it and/or modify it
@@ -412,6 +413,7 @@ options.
 * Compose Menu::
 * Alias Menu::
 * Attachment Menu::
+* List Menu::
 @end menu
 
 @node Index, Pager, , Screens and Menus
@@ -501,7 +503,7 @@ too. The alias mechanism and thus the alias menu also features grouping
 several addresses by a shorter nickname, the actual alias, so that users
 don't have to select each single recipient manually.
 
-@node Attachment Menu, , Alias Menu, Screens and Menus
+@node Attachment Menu, List Menu, Alias Menu, Screens and Menus
 @subsection Attachment Menu
 
 As will be later discussed in detail, Mutt features a good and stable
@@ -511,6 +513,15 @@ structure in detail: what content parts are attached to which parent
 part (which gives a true tree structure), which type is of what type and
 what size.  Single parts may saved, deleted or modified to offer great
 and easy access to message's internals.
+
+@node List Menu, , Attachment Menu, Screens and Menus
+@subsection List Menu
+
+The list menu assists with operations on mailing lists. RFC 2369 defines
+several interactions with mailing lists and list memberships that can
+be specified within the email message: subscribe, unsubscribe, contact
+the list owner, etc. When you invoke the list menu, these interactions
+are made accessible as menu options.
 
 @node Moving Around in Menus, Editing Input Fields, Screens and Menus, Getting Started
 @section Moving Around in Menus
@@ -947,6 +958,10 @@ Escape code@tab Description
 3@emph{<color>}@tab Foreground color is @emph{<color>} (see @ref{Color sequences})
 @item
 4@emph{<color>}@tab Background color is @emph{<color>} (see @ref{Color sequences})
+@item
+38;5;@emph{<color>}@tab Foreground color is an 8-bit @emph{<color>}
+@item
+48;5;@emph{<color>}@tab Background color is an 8-bit @emph{<color>}
 @end multitable
 
 @noindent
@@ -1193,16 +1208,19 @@ to let the user read the output of the command), based on the return
 status of the named command. If no command is given, an interactive
 shell is executed.
 
+@item  @samp{<skip-headers>}@anchor{skip-headers} (default: H) 
+This function will skip past the headers of the current message.
+
+@item  @samp{<skip-quoted>}@anchor{skip-quoted} (default: S) 
+This function will go to the next line of non-quoted text which comes
+after a line of quoted text in the internal pager.
+
 @item  @samp{<toggle-quoted>}@anchor{toggle-quoted} (default: T) 
 The pager uses the $quote_regexp (@pxref{quote_regexp})
 variable to detect quoted text when displaying the body of the message.
 This function toggles the display of the quoted material in the message.
 It is particularly useful when being interested in just the response and
 there is a large amount of quoted text in the way.
-
-@item  @samp{<skip-quoted>}@anchor{skip-quoted} (default: S) 
-This function will go to the next line of non-quoted text which comes
-after a line of quoted text in the internal pager.
 @end table
 
 @node Sending Mail, Forwarding and Bouncing Mail, Reading Mail, Getting Started
@@ -1669,7 +1687,9 @@ settings will temporarily be restored, and removed again when the
 session finishes (or is backgrounded again).
 
 Mutt will save all @samp{boolean} and
-@samp{quadoption} configuration variables, along with
+@samp{quadoption} configuration variables,
+the current folder (which will be used for @samp{^}
+mailbox shortcut expansion), along with:
 $folder (@pxref{folder}),
 $record (@pxref{record}),
 $postponed (@pxref{postponed}),
@@ -1706,9 +1726,11 @@ example, by adding your own comments). Bouncing is done using the
 and ‘f’ respectively.
 
 Forwarding can be done by including the original message in the new
-message's body (surrounded by indicating lines) or including it as a
-MIME attachment, depending on the value of the $mime_forward (@pxref{mime_forward}) variable.  Decoding of
-attachments, like in the pager, can be controlled by the $forward_decode (@pxref{forward_decode}) and $mime_forward_decode (@pxref{mime_forward_decode}) variables,
+message's body (surrounded by indicating lines: see $forward_attribution_intro (@pxref{forward_attribution_intro})
+and $forward_attribution_trailer (@pxref{forward_attribution_trailer}))
+or including it as a MIME attachment, depending on the value of the
+$mime_forward (@pxref{mime_forward}) variable.  Decoding
+of attachments, like in the pager, can be controlled by the $forward_decode (@pxref{forward_decode}) and $mime_forward_decode (@pxref{mime_forward_decode}) variables,
 respectively.  The desired forwarding format may depend on the content,
 therefore $mime_forward (@pxref{mime_forward}) is a
 quadoption which, for example, can be set to ‘ask-no’.
@@ -1721,7 +1743,8 @@ the original email can also be attached to the new message, based on the
 quadoption $forward_attachments (@pxref{forward_attachments}).
 
 The inclusion of headers is controlled by the current setting of the
-$weed (@pxref{weed}) variable, unless $mime_forward (@pxref{mime_forward}) is set.
+$weed (@pxref{weed}) variable, unless $mime_forward (@pxref{mime_forward}) is set.  The subject of
+the email is controlled by $forward_format (@pxref{forward_format}).
 
 Editing the message to forward follows the same procedure as sending or
 replying to a message does, but can be disabled via the quadoption
@@ -1760,6 +1783,10 @@ See also the $postpone (@pxref{postpone}) quad-option.
 
 @node Encryption and Signing, , Postponing Mail, Getting Started
 @section Encryption and Signing
+
+Mutt supports encrypting and signing emails when used interactively.
+In batch mode, cryptographic operations are disabled, so these options
+can't be used to sign an email sent via a cron job, for instance.
 
 OpenPGP and S/MIME are enabled in one of two ways: ‘classic
 mode’ or GPGME.  The former invokes external programs to
@@ -2055,9 +2082,9 @@ parenthesis-enclosed expression will be evaluated as MuttLisp.  See the
 Using MuttLisp (@pxref{Using MuttLisp [EXPERIMENTAL]}) section for more details.
 
 @noindent
-@anchor{Using MuttLisp expresions}
+@anchor{Using MuttLisp expressions}
 
-@strong{Using MuttLisp expresions}
+@strong{Using MuttLisp expressions}
 
 @example
 
@@ -2237,6 +2264,10 @@ unalias muttdude
 unalias *
 @end example
 
+Note: The alias @emph{key} is matched case
+insensitively when creating (checking for duplicates), removing, or
+expanding aliases.
+
 Unlike other mailers, Mutt doesn't require aliases to be defined in a
 special file.  The @code{alias} command can appear anywhere
 in a configuration file, as long as this file is @code{source}d (@pxref{Reading Initialization Commands From Another File}).  Consequently, you
@@ -2275,7 +2306,7 @@ without a partial alias, such as at the beginning of the prompt or after
 a comma denoting multiple addresses.
 
 In the alias menu, you can select as many aliases as you want with the
-@samp{select-entry} key (default: <Return>), and use
+@samp{tag-entry} key (default: <Space> or t), and use
 the @emph{exit} key (default: q) to return to the address
 prompt.
 
@@ -2371,9 +2402,10 @@ well as @emph{\C} is ignored, so that
 @emph{\cA} and @emph{\ca} are all
 equivalent.  An alternative form is to specify the key as a three digit
 octal number prefixed with a ‘\’ (for example
-@emph{\177} is equivalent to @emph{\c?}). In
-addition, @emph{key} may be a symbolic name as shown in
-@ref{Symbolic key names}.
+@emph{\177} is equivalent to @emph{\c?}).
+You can also use the form @emph{<177>}, which
+allows octal numbers with an arbitrary number of digits.  In addition,
+@emph{key} may be a symbolic name as shown in @ref{Symbolic key names}.
 
 @noindent
 @anchor{Symbolic key names}
@@ -2420,6 +2452,8 @@ Symbolic name@tab Meaning
 @item
 <return>@tab Return
 @item
+<keypadenter>@tab Enter key on numeric keypad
+@item
 <home>@tab Home
 @item
 <end>@tab End
@@ -2451,9 +2485,10 @@ specified key sequence.
 
 @menu
 * Terminal Keybindings::
+* Enter versus Return::
 @end menu
 
-@node Terminal Keybindings, , , Changing the Default Key Bindings
+@node Terminal Keybindings, Enter versus Return, , Changing the Default Key Bindings
 @subsection Terminal Keybindings
 
 Some key bindings are controlled by the terminal, and so by
@@ -2479,6 +2514,27 @@ undef}’ will unbind @samp{^\} (and
 (e.g, by placing that line in your .bashrc, or in a Mutt wrapper
 script/function) you can use the key sequence in your Mutt
 bindings.
+
+@node Enter versus Return, , Terminal Keybindings, Changing the Default Key Bindings
+@subsection Enter versus Return
+
+Prior to version 2.2, Mutt used a default ncurses mode
+(‘@samp{nl()}’).  This mode maps keyboard
+input of either @samp{<Enter>} or
+@samp{<Return>} to the same value, which Mutt
+interpreted as @samp{<Return>} internally.
+
+However, starting in version 2.2, this mode is turned off,
+allowing @samp{<Return>} and
+@samp{<Enter>} to be mapped separately, if
+desired.  The default keyboard mappings set both, but you can
+override this or create new bindings with one or the other (or
+both).
+
+Note that in terminal application, such as Mutt,
+@samp{<Enter>} is the same as ‘\n’
+and @samp{^J}; while @samp{<Return>}
+is the same as ‘\r’ and @samp{^M}.
 
 @node Changing the current working directory, Defining Aliases for Character Sets, Changing the Default Key Bindings, Configuration
 @section Changing the current working directory
@@ -2980,6 +3036,11 @@ about where to break and how, Mutt always folds headers using a tab for
 readability. (Note that the sending side is not affected by this, Mutt
 tries to implement standards compliant folding.)
 
+Despite not being a real header, Mutt will also display an mbox
+"From_" line in the pager along with other headers.  This
+line can be manipulated with @code{ignore/unignore} and
+@code{hdr_order/unhdr_order} commands.
+
 @node Selecting Headers, Ordering Displayed Headers, Header Display, Message Header Display
 @subsection Selecting Headers
 
@@ -3029,6 +3090,11 @@ unignore from date subject to cc
 unignore organization organisation x-mailer: x-newsreader: x-mailing-list:
 unignore posted-to:
 @end example
+
+The above example will show "From:" headers as well as mbox
+"From_" lines.  To hide the latter, instead use
+"@samp{unignore from: date subject to cc}" on
+the second line.
 
 @node Ordering Displayed Headers, , Selecting Headers, Message Header Display
 @subsection Ordering Displayed Headers
@@ -3246,6 +3312,14 @@ To remove a mailing list from the list of subscribed mailing lists, but
 keep it on the list of known mailing lists, use
 @code{unsubscribe}.
 
+All of the mailing list configuration options described so far govern
+mutt's knowledge of your list subscriptions and how it presents list
+information to you. If you have a message from a mailing list, you
+can also use the list
+menu (@pxref{Default List Menu Bindings}) (bound to "ESC L" by default) to interact with
+the message's list's list server.  This makes it easy to subscribe,
+unsubscribe, and so on.
+
 @node Using Multiple Spool Mailboxes, Monitoring Incoming Mail, Mailing Lists <1>, Configuration
 @section Using Multiple Spool Mailboxes
 
@@ -3286,6 +3360,11 @@ Usage:
 
 @t{mailboxes [
 [
+-notify
+| 
+-nonotify
+]
+[
 -poll
 | 
 -nopoll
@@ -3306,6 +3385,12 @@ mailbox
 
 This command specifies folders which can receive mail and which will be
 checked for new messages periodically.
+
+Use @samp{-nonotify} to disable notifying when new mail
+arrives.  The @samp{-notify} argument can be used to reenable
+notifying for an existing mailbox.  If unspecified: a new
+mailbox will notify by default, while an existing mailbox will be
+unchanged.
 
 To disable polling, specify @samp{-nopoll} before the
 mailbox name.  The @samp{-poll} argument can be used to
@@ -4558,9 +4643,12 @@ certain header fields, such as @samp{Attach:}, in a special way.
 The @samp{mailto_allow} and @samp{unmailto_allow}
 commands allow the user to modify the list of approved headers.
 
-Mutt initializes the default list to contain only the @samp{Subject}
-and @samp{Body} header fields, which are the only requirement specified
-by the @samp{mailto:} specification in RFC2368.
+Mutt initializes the default list to contain the
+@samp{Subject} and @samp{Body} header fields,
+which are the only requirement specified by the
+@samp{mailto:} specification in RFC2368, along with
+@samp{Cc}, @samp{In-Reply-To}, and
+@samp{References}, to support mailing list URLs.
 
 @node Advanced Usage, Mutt's MIME Support, Configuration, Top
 @chapter Advanced Usage
@@ -4584,6 +4672,7 @@ by the @samp{mailto:} specification in RFC2368.
 * Start a WWW Browser on URLs::
 * Echoing Text::
 * Message Composition Flow::
+* Batch Composition Flow::
 * Using MuttLisp (EXPERIMENTAL): Using MuttLisp [EXPERIMENTAL].
 * Miscellany::
 @end menu
@@ -5722,6 +5811,15 @@ to set $record (@pxref{record}):
   folder-hook . 'set record=^'
 @end example
 
+Note: the current mailbox shortcut,
+‘@samp{^}’, has no value in some cases.  No
+mailbox is opened when Mutt is invoked to send an email from the
+command-line.  In interactive mode, Mutt reads the muttrc before
+opening the mailbox, so immediate expansion won't work as expected
+either.  This can be an issue when trying to directly assign to $record (@pxref{record}), but also affects the fcc-hook (@pxref{Specify Default Fcc; Mailbox When Composing}) mailbox, which is expanded
+immediately too.  The folder-hook example above works because the
+command is executed later, when the folder-hook fires.
+
 Note: the $record (@pxref{record}) shortcut
 ‘@samp{<}’ is substituted without any
 regard to multiple mailboxes and $fcc_delimiter (@pxref{fcc_delimiter}).  If you use multiple
@@ -5807,6 +5905,37 @@ you would like to use the address given in the ‘Reply-To’
 field, or reply directly to the address given in the ‘From’
 field.  When set to @emph{yes}, the
 ‘Reply-To’ field will be used when present.
+
+While looking at an email message from a mailing list in the index or
+pager, you can interact with the list server in the ways defined by RFC
+2369, provided the email message specifies how to do so.  Invoke the
+list menu (@pxref{Default List Menu Bindings}) (bound to "ESC
+L" by default) to see what options are available for a given
+message. Common options are:
+
+@itemize 
+
+@item
+Post to the list
+
+@item
+Contact the list owner
+
+@item
+Subscribe to the list
+
+@item
+Unsubscribe from the list
+
+@item
+Get help from the list server
+
+@item
+Get list archive information
+@end itemize
+
+@noindent
+Note that many list servers only specify some of these options.
 
 The ‘X-Label:’ header field can be used to further identify
 mailing lists or list subject matter (or just to annotate messages
@@ -5965,7 +6094,9 @@ mail using the @samp{<check-new>} function which is
 unbound by default. Pressing TAB will bring up a menu showing the files
 specified by the @code{mailboxes} command, and indicate
 which contain new messages. Mutt will automatically enter this mode when
-invoked from the command line with the @samp{-y} option.
+invoked from the command line with the @samp{-y} option,
+or from the index/pager via the @samp{<browse-mailboxes>}
+function.
 
 For the pager, index and directory browser menus, Mutt contains the
 @samp{<buffy-list>} function (bound to
@@ -6018,9 +6149,9 @@ feature.
 If $mail_check_stats (@pxref{mail_check_stats}) is set,
 Mutt will periodically calculate the unread, flagged, and total
 message counts for each mailbox watched by the
-@code{mailboxes} command.  This calculation takes place at
-the same time as new mail polling, but is controlled by a separate
-timer: $mail_check_stats_interval (@pxref{mail_check_stats_interval}).
+@code{mailboxes} command.  (Note: IMAP mailboxes only support
+unread and total counts).  This calculation takes place at the same
+time as new mail polling, but is controlled by a separate timer: $mail_check_stats_interval (@pxref{mail_check_stats_interval}).
 
 The sidebar can display these message counts.  See $sidebar_format (@pxref{sidebar_format}).
 
@@ -6125,7 +6256,7 @@ unset confirmappend
 macro index ,a "<save-message>=archive<enter><enter-command>echo 'Saved to archive'<enter>"
 @end example
 
-@node Message Composition Flow, Using MuttLisp [EXPERIMENTAL], Echoing Text, Advanced Usage
+@node Message Composition Flow, Batch Composition Flow, Echoing Text, Advanced Usage
 @section Message Composition Flow
 
 This is a brief overview of the steps Mutt takes during message
@@ -6194,6 +6325,10 @@ Compose menu (@pxref{The Compose Menu}).  Note: send2-hook (@pxref{send2-hook}) 
 the headers are changed.
 
 @item
+$send_multipart_alternative (@pxref{send_multipart_alternative})
+generation.
+
+@item
 Message encryption and signing.  Key selection.
 
 @item
@@ -6210,7 +6345,67 @@ before sending the message.  It is now by default saved
 afterwards, but if the saving fails, the user is prompted.
 @end itemize
 
-@node Using MuttLisp [EXPERIMENTAL], Miscellany, Message Composition Flow, Advanced Usage
+@node Batch Composition Flow, Using MuttLisp [EXPERIMENTAL], Message Composition Flow, Advanced Usage
+@section Batch Composition Flow
+
+In batch mode, Mutt performs less steps than interactive mode.
+Encryption and Signing are not supported.
+
+@itemize 
+
+@item
+my_hdr (@pxref{User-Defined Headers}) processing for To, Cc,
+Bcc headers.  (Subject is not processed.)
+
+@item
+From header setting.  Note: this is so send-hook (@pxref{Change Settings Based Upon Message Recipients})s below can match ~P, but
+From is re-set further below in case a send-hook changes the
+value.
+
+@item
+send-hook (@pxref{Change Settings Based Upon Message Recipients})
+
+@item
+From header setting.
+
+@item
+my_hdr (@pxref{User-Defined Headers}) processing for From,
+Reply-To, Message-ID and user-defined headers.  The To, Cc,
+Bcc, Subject, and Return-Path headers are ignored at this
+stage.
+
+@item
+Message body is copied from stdin.  $signature (@pxref{signature}) is not appended in batch
+mode.
+
+@item
+send2-hook (@pxref{send2-hook})
+
+@item
+$realname (@pxref{realname}) part of From header setting.
+
+@item
+fcc-hook (@pxref{Specify Default Fcc; Mailbox When Composing}).  Fcc setting.
+
+@item
+$send_multipart_alternative (@pxref{send_multipart_alternative})
+generation.
+
+@item
+Fcc saving if $fcc_before_send (@pxref{fcc_before_send}) is set.  (Note the
+variable documentation for caveats of Fcc'ing before sending.)
+
+@item
+Message sending.
+
+@item
+Fcc saving if $fcc_before_send (@pxref{fcc_before_send}) is unset
+(the default).  Note: prior to version 1.12, the Fcc was saved
+before sending the message.  It is now by default saved
+afterwards, but if the saving fails, the user is prompted.
+@end itemize
+
+@node Using MuttLisp [EXPERIMENTAL], Miscellany, Batch Composition Flow, Advanced Usage
 @section Using MuttLisp (EXPERIMENTAL)
 
 MuttLisp is a Lisp-like enhancement for the Mutt configuration
@@ -6409,7 +6604,7 @@ echo (not (equal one two))
 @node and, or, not, MuttLisp Functions
 @subsubsection and
 
-Returns the first argument that evalutes to the empty string.
+Returns the first argument that evaluates to the empty string.
 Otherwise returns the last argument, or "t" if there are no arguments.
 
 @example
@@ -6463,6 +6658,26 @@ echo (if "" one two)
 set spoolfile = "/var/mail/user"
 echo (if (equal $spoolfile "/var/mail/user") yes no)
   ==> "yes"
+@end example
+
+Note that boolean configuration variables evaluate to the strings
+"yes" or "no".  You can see the value of other
+kinds of configuration variables using the
+echo (@pxref{Echoing Text}) command.
+
+@example
+
+unset allow_ansi
+echo $allow_ansi
+  ===> "no"
+
+# the correct way to test a boolean:
+echo (if (equal $allow_ansi "yes") "set" "unset")
+  ===> "unset"
+
+# the incorrect way to test a boolean:
+echo (if $allow_ansi "set" "unset")
+  ===> "set"
 @end example
 
 @node Examples <1>, , MuttLisp Functions, Using MuttLisp [EXPERIMENTAL]
@@ -6682,6 +6897,48 @@ and the @samp{<reply>} and
 See table @ref{Default Attachment Menu Bindings} for all available
 functions.
 
+@menu
+* Viewing Attachments::
+@end menu
+
+@node Viewing Attachments, , , The Attachment Menu
+@subsubsection Viewing Attachments
+
+There are four(!) ways of viewing attachments, so the functions
+deserve some extra explanation.
+
+@table @asis
+
+@item   @samp{<view-mailcap>}  (default keybinding: m)  
+This will use the first matching mailcap entry.
+
+If no matching mailcap entries are found, it will abort with an
+error message.
+
+@item   @samp{<view-attach>}  (default keybinding: <Enter>)  
+Mutt will display internally supported MIME types (see @ref{Viewing MIME Messages in the Pager}) in the pager.  This will respect
+auto_view (@pxref{MIME Autoview}) settings, to determine
+whether to use a @samp{copiousoutput} mailcap entry or
+just directly display the attachment.
+
+Other MIME types will use the first matching mailcap entry.
+
+If no matching mailcap entries are found, the attachment will
+be displayed in the pager as raw text.
+
+@item   @samp{<view-pager>}  
+Mutt will use the first matching
+@samp{copiousoutput} mailcap entry to display the
+attachment in the pager (regardless of auto_view (@pxref{MIME Autoview}) settings).
+
+If no matching mailcap entries are found, the attachment will
+be displayed in the pager as raw text.
+
+@item   @samp{<view-text>}  (default keybinding: T)  
+The attachment will always be displayed in the pager as raw
+text.
+@end table
+
 @node The Compose Menu, , The Attachment Menu, Using MIME in Mutt
 @subsection The Compose Menu
 
@@ -6723,7 +6980,7 @@ list of available expandos to format this display to your needs.
 To get most out of MIME, it's important that a MIME part's content type
 matches the content as closely as possible so that the recipient's
 client can automatically select the right viewer for the
-content. However, there's no reliable for Mutt to know how to detect
+content. However, there's no reliable way for Mutt to know how to detect
 every possible file type. Instead, it uses a simple plain text mapping
 file that specifies what file extension corresponds to what MIME
 type. This file is called @samp{mime.types}.
@@ -7346,7 +7603,10 @@ alternative_order text/enriched text/plain text \
 Next, Mutt will check if any of the types have a defined @code{auto_view} (@pxref{MIME Autoview}), and use that.
 
 @item
-Failing that, Mutt will look for any text type.
+Failing that, Mutt will look first for
+@samp{text/enriched}, followed by
+@samp{text/plain}, and finally
+@samp{text/html}.
 
 @item
 As a last attempt, Mutt will look for any type it knows how to handle.
@@ -7376,11 +7636,13 @@ Content in html format
 </html>
 @end example
 
-A preview of the alternative can be viewed in the compose menu using the functions
-@samp{<view-alt>},
-@samp{<view-alt-text>} and
-@samp{<view-alt-mailcap>}, bound to
-"v", "Esc v" and "V" by default.
+A preview of the alternative can be viewed in the compose menu using
+the functions @samp{<view-alt>} (bound to
+"v"), @samp{<view-alt-text>} (bound to
+"Esc v"), @samp{<view-alt-mailcap>} (bound
+to "V"), and @samp{<view-alt-pager>}
+(unbound).  See @ref{Viewing Attachments} for a discussion of
+the differences between these viewing functions.
 
 @node Attachment Searching and Counting, MIME Lookup, MIME Multipart/Alternative, Mutt's MIME Support
 @section Attachment Searching and Counting
@@ -8068,7 +8330,8 @@ If enabled, $header_cache (@pxref{header_cache}) can be
 used to either point to a file or a directory. If set to point to a
 file, one database file for all folders will be used (which may result
 in lower performance), but one file per folder if it points to a
-directory.
+directory.  When pointing to a directory, be sure to create the directory
+in advance, or Mutt will interpret it as a file to be created.
 
 @node Body Caching, Cache Directories, Header Caching, Local Caching
 @subsection Body Caching
@@ -8978,10 +9241,12 @@ will send out the user's private gnupg keyring to
 on screen carefully enough.
 
 To prevent these issues, Mutt by default only accepts the
-@samp{Subject} and @samp{Body} headers.
-Allowed headers can be adjusted with the
-@code{mailto_allow} (@pxref{Control allowed header fields in a mailto; URL}) and
-@code{unmailto_allow} (@pxref{Control allowed header fields in a mailto; URL}) commands.
+@samp{Subject}, @samp{Body},
+@samp{Cc}, @samp{In-Reply-To}, and
+@samp{References} headers.  Allowed headers can be
+adjusted with the @code{mailto_allow} (@pxref{Control allowed header fields in a mailto; URL}) and
+@code{unmailto_allow} (@pxref{Control allowed header fields in a mailto; URL})
+commands.
 
 @node External Applications, , Information Leaks, Security Considerations
 @section External Applications
@@ -9128,7 +9393,11 @@ Option@tab Description
 @item
 -c@tab specify a carbon-copy (Cc) address
 @item
--d@tab log debugging output to ~/.muttdebug0 if mutt was compiled with +DEBUG; it can range from 1-5 and affects verbosity (a value of 2 is recommended)
+-d@tab log debugging output to ~/.muttdebug0 if
+mutt was compiled with +DEBUG; it can range from -5 to 5 and affects
+verbosity. A value of 0 disables debugging. A value less than zero
+disables automatic log file rotation. A value of 2 is recommended for
+most diagnostics.
 @item
 -D@tab print the value of all Mutt variables to stdout
 @item
@@ -9228,11 +9497,15 @@ aborted.
 
 A draft file passed with @samp{-H} will be used as the
 initial header and body for the message.  Multipart messages can be
-used as a draft file.  When combined with @samp{-E}, the
-draft file will be updated to the final state of the message after
-composition, regardless of whether the message is sent, aborted, or
-even postponed.  Note that if the message is sent encrypted or signed,
-the draft file will be saved that way too.
+used as a draft file, and are processed the same in interactive and
+batch mode; they are not passed through untouched.  For example,
+encrypted draft files will be decrypted.  When combined with
+@samp{-E}, the draft file will be updated to the final
+state of the message after composition, regardless of whether the
+message is sent, aborted, or even postponed.  Note that if the message
+is sent encrypted or signed, the draft file will be saved that way
+too.
+
 
 All files passed with @samp{-a} @emph{file}
 will be attached as a MIME part to the message. To attach a single or
@@ -9604,6 +9877,11 @@ description
 
 @t{mailboxes [
 [
+-notify
+| 
+-nonotify
+]
+[
 -poll
 | 
 -nopoll
@@ -9912,6 +10190,7 @@ hook-type
 * assumed_charset::
 * attach_charset::
 * attach_format::
+* attach_save_charset_convert::
 * attach_save_dir::
 * attach_sep::
 * attach_split::
@@ -9940,6 +10219,7 @@ hook-type
 * check_mbox_size::
 * check_new::
 * collapse_unread::
+* compose_confirm_detach_first::
 * compose_format::
 * config_charset::
 * confirmappend::
@@ -10056,6 +10336,7 @@ hook-type
 * index_format::
 * ispell::
 * keep_flagged::
+* local_date_header::
 * mail_check::
 * mail_check_recent::
 * mail_check_stats::
@@ -10077,6 +10358,7 @@ hook-type
 * message_cache_clean::
 * message_cachedir::
 * message_format::
+* message_id_format::
 * meta_key::
 * metoo::
 * mh_purge::
@@ -10099,6 +10381,7 @@ hook-type
 * pager_context::
 * pager_format::
 * pager_index_lines::
+* pager_skip_quoted_context::
 * pager_stop::
 * pattern_format::
 * pgp_auto_decode::
@@ -10252,7 +10535,9 @@ hook-type
 * sort_alias::
 * sort_aux::
 * sort_browser::
+* sort_browser_mailboxes::
 * sort_re::
+* sort_thread_groups::
 * spam_separator::
 * spoolfile::
 * ssl_ca_certificates_file::
@@ -10269,6 +10554,7 @@ hook-type
 * ssl_usesystemcerts::
 * ssl_verify_dates::
 * ssl_verify_host::
+* ssl_verify_host_override::
 * ssl_verify_partial_chains::
 * ssl_ciphers::
 * status_chars::
@@ -10538,7 +10824,7 @@ set attach_charset="iso-2022-jp:euc-jp:shift_jis:utf-8"
 Note: for Japanese users, ‘iso-2022-*’ must be put at the head
 of the value as shown above if included.
 
-@node attach_format, attach_save_dir, attach_charset, Configuration Variables
+@node attach_format, attach_save_charset_convert, attach_charset, Configuration Variables
 @subsection attach_format
 
 @display
@@ -10595,7 +10881,20 @@ following @samp{printf(3)}-style sequences are understood:
 
 For an explanation of ‘soft-fill’, see the $index_format (@pxref{index_format}) documentation.
 
-@node attach_save_dir, attach_sep, attach_format, Configuration Variables
+@node attach_save_charset_convert, attach_save_dir, attach_format, Configuration Variables
+@subsection attach_save_charset_convert
+
+@display
+Type: quadoption
+Default: ask-yes
+@end display
+
+When saving received text-type attachments, this quadoption
+prompts to convert the character set if the encoding of the
+attachment (or $assumed_charset (@pxref{assumed_charset}) if none is specified) differs
+from charset (@pxref{charset}).
+
+@node attach_save_dir, attach_sep, attach_save_charset_convert, Configuration Variables
 @subsection attach_save_dir
 
 @display
@@ -10956,6 +11255,8 @@ Example:
 set certificate_file=~/.mutt/certificates
 @end example
 
+(OpenSSL and GnuTLS only)
+
 @node change_folder_next, charset, certificate_file, Configuration Variables
 @subsection change_folder_next
 
@@ -11023,7 +11324,7 @@ checking each file to see if it has already been looked at.  If
 this variable is @emph{unset}, no check for new mail is performed
 while the mailbox is open.
 
-@node collapse_unread, compose_format, check_new, Configuration Variables
+@node collapse_unread, compose_confirm_detach_first, check_new, Configuration Variables
 @subsection collapse_unread
 
 @display
@@ -11034,7 +11335,24 @@ Default: yes
 When @emph{unset}, Mutt will not collapse a thread if it contains any
 unread messages.
 
-@node compose_format, config_charset, collapse_unread, Configuration Variables
+@node compose_confirm_detach_first, compose_format, collapse_unread, Configuration Variables
+@subsection compose_confirm_detach_first
+
+@display
+Type: boolean
+Default: yes
+@end display
+
+When @emph{set}, Mutt will prompt for confirmation when trying to
+use @samp{<detach-file>} on the first entry in the compose menu.
+This is to help prevent irreversible loss of the typed message by
+accidentally hitting 'D' in the menu.
+
+Note: Mutt only prompts for the first entry.  It doesn't keep
+track of which message is the typed message if the entries are
+reordered, or if the first entry was already deleted.
+
+@node compose_format, config_charset, compose_confirm_detach_first, Configuration Variables
 @subsection compose_format
 
 @display
@@ -11530,6 +11848,9 @@ synchronizing a mailbox.  If set to @emph{yes}, messages marked for
 deleting will automatically be purged without prompting.  If set to
 @emph{no}, messages marked for deletion will be kept in the mailbox.
 
+This option is ignored for maildir-style mailboxes when $maildir_trash (@pxref{maildir_trash})
+is set.
+
 @node delete_untag, digest_collapse, delete, Configuration Variables
 @subsection delete_untag
 
@@ -11711,7 +12032,7 @@ Default: (empty)
 @end display
 
 The file which includes random data that is used to initialize SSL
-library functions.
+library functions. (OpenSSL only)
 
 @node envelope_from_address, error_history, entropy_file, Configuration Variables
 @subsection envelope_from_address
@@ -11773,6 +12094,8 @@ Default: yes
 This variable controls whether or not attachments on outgoing messages
 are saved along with the main body of your message.
 
+Note: $fcc_before_send (@pxref{fcc_before_send}) forces the default (set) behavior of this option.
+
 @node fcc_before_send, fcc_clear, fcc_attach, Configuration Variables
 @subsection fcc_before_send
 
@@ -11803,7 +12126,11 @@ Default: no
 When this variable is @emph{set}, FCCs will be stored unencrypted and
 unsigned, even when the actual message is encrypted and/or
 signed.
+
+Note: $fcc_before_send (@pxref{fcc_before_send}) forces the default (unset) behavior of this option.
 (PGP only)
+
+See also $pgp_self_encrypt (@pxref{pgp_self_encrypt}), $smime_self_encrypt (@pxref{smime_self_encrypt}).
 
 @node fcc_delimiter, flag_safe, fcc_clear, Configuration Variables
 @subsection fcc_delimiter
@@ -11998,15 +12325,18 @@ otherwise $mime_forward_decode (@pxref{mime_forward_decode}) is used instead.
 @subsection forward_decrypt
 
 @display
-Type: boolean
+Type: quadoption
 Default: yes
 @end display
 
-Controls the handling of encrypted messages when forwarding a message.
-When @emph{set}, the outer layer of encryption is stripped off.  This
-variable is only used if $mime_forward (@pxref{mime_forward}) is @emph{set} and
-$mime_forward_decode (@pxref{mime_forward_decode}) is @emph{unset}.
-(PGP only)
+This quadoption controls the handling of encrypted messages when
+forwarding or attaching a message.  When set to or answered
+‘yes’, the outer layer of encryption is stripped off.
+
+This variable is used if $mime_forward (@pxref{mime_forward}) is @emph{set} and
+$mime_forward_decode (@pxref{mime_forward_decode}) is @emph{unset}.  It is also used when
+attaching a message via @samp{<attach-message>} in the compose
+menu.  (PGP only)
 
 @node forward_edit, forward_format, forward_decrypt, Configuration Variables
 @subsection forward_edit
@@ -12114,7 +12444,8 @@ This variable points to the header cache database.
 If pointing to a directory Mutt will contain a header cache
 database file per folder, if pointing to a file that file will
 be a single global header cache. By default it is @emph{unset} so no header
-caching will be used.
+caching will be used.  If pointing to a directory, it must be
+created in advance.
 
 Header caching can greatly improve speed when opening POP, IMAP
 MH or Maildir folders, see ‘caching (@pxref{Local Caching})’ for details.
@@ -12924,7 +13255,7 @@ Default: ‘/usr/bin/ispell’
 
 How to invoke ispell (GNU's spell-checking software).
 
-@node keep_flagged, mail_check, ispell, Configuration Variables
+@node keep_flagged, local_date_header, ispell, Configuration Variables
 @subsection keep_flagged
 
 @display
@@ -12936,7 +13267,19 @@ If @emph{set}, read messages marked as flagged will not be moved
 from your spool mailbox to your $mbox (@pxref{mbox}) mailbox, or as a result of
 a ‘mbox-hook (@pxref{Using Multiple Spool Mailboxes})’ command.
 
-@node mail_check, mail_check_recent, keep_flagged, Configuration Variables
+@node local_date_header, mail_check, keep_flagged, Configuration Variables
+@subsection local_date_header
+
+@display
+Type: boolean
+Default: yes
+@end display
+
+If @emph{set}, the date in the Date header of emails that you send will be in
+your local timezone. If unset a UTC date will be used instead to avoid
+leaking information about your current location.
+
+@node mail_check, mail_check_recent, local_date_header, Configuration Variables
 @subsection mail_check
 
 @display
@@ -12960,9 +13303,6 @@ since the last time you opened the mailbox.  When @emph{unset}, Mutt will notify
 if any new mail exists in the mailbox, regardless of whether you have visited it
 recently.
 
-When @emph{$mark_old (@pxref{mark_old})} is set, Mutt does not consider the mailbox to contain new
-mail if only old messages exist.
-
 @node mail_check_stats, mail_check_stats_interval, mail_check_recent, Configuration Variables
 @subsection mail_check_stats
 
@@ -12973,10 +13313,13 @@ Default: no
 
 When @emph{set}, mutt will periodically calculate message
 statistics of a mailbox while polling for new mail.  It will
-check for unread, flagged, and total message counts.  Because
-this operation is more performance intensive, it defaults to
-@emph{unset}, and has a separate option, $mail_check_stats_interval (@pxref{mail_check_stats_interval}), to
-control how often to update these counts.
+check for unread, flagged, and total message counts.
+(Note: IMAP mailboxes only support unread and total counts).
+
+Because this operation is more performance intensive, it defaults
+to @emph{unset}, and has a separate option,
+$mail_check_stats_interval (@pxref{mail_check_stats_interval}), to control how often to update these
+counts.
 
 Message statistics can also be explicitly calculated by invoking the
 @samp{<check-stats>}
@@ -13105,7 +13448,7 @@ Also see the $smart_wrap (@pxref{smart_wrap}) variable.
 
 @display
 Type: regular expression
-Default: ‘!^\.[^.]’
+Default: ‘!^\\.[^.]’
 @end display
 
 A regular expression used in the file browser, optionally preceded by
@@ -13204,7 +13547,7 @@ as fast as for local folders.
 
 Also see the $message_cache_clean (@pxref{message_cache_clean}) variable.
 
-@node message_format, meta_key, message_cachedir, Configuration Variables
+@node message_format, message_id_format, message_cachedir, Configuration Variables
 @subsection message_format
 
 @display
@@ -13216,7 +13559,61 @@ This is the string displayed in the ‘attachment’ menu for
 attachments of type @samp{message/rfc822}.  For a full listing of defined
 @samp{printf(3)}-like sequences see the section on $index_format (@pxref{index_format}).
 
-@node meta_key, metoo, message_format, Configuration Variables
+@node message_id_format, meta_key, message_format, Configuration Variables
+@subsection message_id_format
+
+@display
+Type: string
+Default: ‘<%z@@%f>’
+@end display
+
+This variable describes the format of the Message-ID generated
+when sending messages.  Mutt 2.0 introduced a more compact
+format, but this variable allows the ability to choose your own
+format.  The value may end in ‘|’ to invoke an external filter.
+See formatstrings-filters (@pxref{Filters}).
+
+Please note that the Message-ID value follows a strict syntax,
+and you are responsible for ensuring correctness if you change
+this from the default.  In particular, the value must follow the
+syntax in RFC 5322: ‘@samp{"<" id-left "@@" id-right ">"}’.  No
+spaces are allowed, and @samp{id-left} should follow the
+dot-atom-text syntax in the RFC.  The @samp{id-right} should
+generally be left at %f.
+
+The old Message-ID format can be used by setting this to:
+‘@samp{<%Y%02m%02d%02H%02M%02S.G%c%p@@%f>}’
+
+The following @samp{printf(3)}-style sequences are understood:
+
+@multitable @columnfractions 0.5 0.5
+@item
+%c @tab step counter looping from ‘A’ to ‘Z’
+@item
+%d @tab current day of the month (GMT)
+@item
+%f @tab $hostname (@pxref{hostname})
+@item
+%H @tab current hour using a 24-hour clock (GMT)
+@item
+%m @tab current month number (GMT)
+@item
+%M @tab current minute of the hour (GMT)
+@item
+%p @tab pid of the running mutt process
+@item
+%r @tab 3 bytes of pseudorandom data encoded in Base64
+@item
+%S @tab current second of the minute (GMT)
+@item
+%x @tab 1 byte of pseudorandom data hex encoded (example: '1b')
+@item
+%Y @tab current year using 4 digits (GMT)
+@item
+%z @tab 4 byte timestamp + 8 bytes of pseudorandom data encoded in Base64
+@end multitable
+
+@node meta_key, metoo, message_id_format, Configuration Variables
 @subsection meta_key
 
 @display
@@ -13389,6 +13786,8 @@ supported:
 %a @tab The remailer's e-mail address.
 @end multitable
 
+(Mixmaster only)
+
 @node mixmaster, move, mix_entry_format, Configuration Variables
 @subsection mixmaster
 
@@ -13400,7 +13799,7 @@ Default: ‘mixmaster’
 This variable contains the path to the Mixmaster binary on your
 system.  It is used with various sets of parameters to gather the
 list of known remailers, and to finally send a message through the
-mixmaster chain.
+mixmaster chain. (Mixmaster only)
 
 @node move, muttlisp_inline_eval, mixmaster, Configuration Variables
 @subsection move
@@ -13475,6 +13874,13 @@ messages. The value ‘builtin’ means to use the built-in pager, otherwise thi
 variable should specify the pathname of the external pager you would
 like to use.
 
+The string may contain a ‘%s’, which will be substituted with
+the generated message filename.  Mutt will add quotes around the
+string substituted for ‘%s’ automatically according to shell
+quoting rules, so you should avoid adding your own.  If no ‘%s’
+is found in the string, Mutt will append the message filename to
+the end of the string.
+
 Using an external pager may have some disadvantages: Additional
 keystrokes are necessary because you can't call mutt functions
 directly from the pager, and screen resizes cause lines longer than
@@ -13513,7 +13919,7 @@ displayed before each message in either the internal or an external
 pager.  The valid sequences are listed in the $index_format (@pxref{index_format})
 section.
 
-@node pager_index_lines, pager_stop, pager_format, Configuration Variables
+@node pager_index_lines, pager_skip_quoted_context, pager_format, Configuration Variables
 @subsection pager_index_lines
 
 @display
@@ -13533,7 +13939,21 @@ no index being shown.  If the number of messages in the current folder
 is less than $pager_index_lines (@pxref{pager_index_lines}), then the index will only use as
 many lines as it needs.
 
-@node pager_stop, pattern_format, pager_index_lines, Configuration Variables
+@node pager_skip_quoted_context, pager_stop, pager_index_lines, Configuration Variables
+@subsection pager_skip_quoted_context
+
+@display
+Type: number
+Default: 0
+@end display
+
+Determines the number of lines of context to show before the
+unquoted text when using @samp{<skip-quoted> (@pxref{skip-quoted})}. When set to a
+positive number at most that many lines of the previous quote are
+displayed. If the previous quote is shorter the whole quote is
+displayed.
+
+@node pager_stop, pattern_format, pager_skip_quoted_context, Configuration Variables
 @subsection pager_stop
 
 @display
@@ -14748,13 +15168,41 @@ Also see $wrap (@pxref{wrap}).
 @subsection reply_regexp
 
 @display
-Type: regular expression
-Default: ‘^(re([\[0-9\]+])*|aw):[ \t]*’
+Type: regular expression (localized)
+Default: ‘^(re)(\\[[0-9]+\\])*:[ \t]*’
 @end display
 
-A regular expression used to recognize reply messages when threading
-and replying. The default value corresponds to the English "Re:" and
-the German "Aw:".
+A regular expression used to recognize reply messages when
+threading and replying. The default value corresponds to the
+standard Latin "Re:" prefix.
+
+This value may have been localized by the translator for your
+locale, adding other prefixes that are common in the locale. You
+can add your own prefixes by appending inside @samp{"^(re)"}.  For
+example: @samp{"^(re|se)"} or @samp{"^(re|aw|se)"}.
+
+The second parenthesized expression matches zero or more
+bracketed numbers following the prefix, such as @samp{"Re[1]: "}.
+The initial @samp{"\\["} means a literal left-bracket character.
+Note the backslash must be doubled when used inside a double
+quoted string in the muttrc.  @samp{"[0-9]+"} means one or more
+numbers.  @samp{"\\]"} means a literal right-bracket.  Finally the
+whole parenthesized expression has a @samp{"*"} suffix, meaning it
+can occur zero or more times.
+
+The last part matches a colon followed by an optional space or
+tab.  Note @samp{"\t"} is converted to a literal tab inside a
+double quoted string.  If you use a single quoted string, you
+would have to type an actual tab character, and would need to
+convert the double-backslashes to single backslashes.
+
+Note: the result of this regexp match against the subject is
+stored in the header cache.  Mutt isn't smart enough to
+invalidate a header cache entry based on changing $reply_regexp (@pxref{reply_regexp}),
+so if you aren't seeing correct values in the index, try
+temporarily turning off the header cache.  If that fixes the
+problem, then once the variable is set to your liking, remove
+your stale header cache files and turn the header cache back on.
 
 @node reply_self, reply_to, reply_regexp, Configuration Variables
 @subsection reply_self
@@ -14905,7 +15353,7 @@ using the value of $realname (@pxref{realname}).
 
 @display
 Type: boolean
-Default: no
+Default: yes
 @end display
 
 When this variable is @emph{set}, Mutt will decode RFC2047-encoded MIME
@@ -15108,6 +15556,13 @@ arguments as recipient addresses.  Mutt appends all recipients after
 adding a @samp{--} delimiter (if not already present).  Additional
 flags, such as for $use_8bitmime (@pxref{use_8bitmime}), $use_envelope_from (@pxref{use_envelope_from}),
 $dsn_notify (@pxref{dsn_notify}), or $dsn_return (@pxref{dsn_return}) will be added before the delimiter.
+
+@strong{Note:} This command is invoked differently from most other
+commands in Mutt.  It is tokenized by space, and invoked directly
+via @samp{execvp(3)} with an array of arguments - so commands or
+arguments with spaces in them are not supported.  The shell is
+not used to run the command, so shell quoting is also not
+supported.
 
 @strong{See also:} $write_bcc (@pxref{write_bcc}).
 
@@ -15357,7 +15812,7 @@ names relative to the previous name. Here's an example:
 
 @display
 Type: sort order
-Default: order
+Default: unsorted
 @end display
 
 Specifies how to sort mailbox entries in the sidebar.  By default, the
@@ -16054,6 +16509,15 @@ to
 You may optionally use the ‘reverse-’ prefix to specify reverse sorting
 order (example: ‘@samp{set sort=reverse-date-sent}’).
 
+For values except ‘threads’, this provides the primary sort
+method.  When two message sort values are equal, $sort_aux (@pxref{sort_aux}) will
+be used for a secondary sort.
+
+When set to ‘threads’, Mutt threads messages in the index. It
+uses the variable $sort_thread_groups (@pxref{sort_thread_groups}) to sort between threads
+(at the top/root level), and $sort_aux (@pxref{sort_aux}) to sort sub-threads and
+children.
+
 @node sort_alias, sort_aux, sort, Configuration Variables
 @subsection sort_alias
 
@@ -16085,32 +16549,32 @@ Type: sort order
 Default: date
 @end display
 
-This provides a secondary sort for messages in the ‘index’ menu, used
-when the $sort (@pxref{sort}) value is equal for two messages.
+For non-threaded mode, this provides a secondary sort for
+messages in the ‘index’ menu, used when the $sort (@pxref{sort}) value is
+equal for two messages.
 
-When sorting by threads, this variable controls how threads are sorted
-in relation to other threads, and how the branches of the thread trees
-are sorted.  This can be set to any value that $sort (@pxref{sort}) can, except
-‘threads’ (in that case, mutt will just use ‘date-sent’).  You can also
-specify the ‘last-’ prefix in addition to the ‘reverse-’ prefix, but ‘last-’
-must come after ‘reverse-’.  The ‘last-’ prefix causes messages to be
-sorted against its siblings by which has the last descendant, using
-the rest of $sort_aux (@pxref{sort_aux}) as an ordering.  For instance,
+When sorting by threads, this variable controls how the branches
+of the thread trees are sorted.  This can be set to any value
+that $sort (@pxref{sort}) can, except ‘threads’ (in that case, mutt will just
+use ‘date-sent’).  You can also specify the ‘last-’ prefix in
+addition to the ‘reverse-’ prefix, but ‘last-’ must come
+after ‘reverse-’.  The ‘last-’ prefix causes messages to be
+sorted against its siblings by which has the last descendant,
+using the rest of $sort_aux (@pxref{sort_aux}) as an ordering.  For instance,
 
 @example
 
 set sort_aux=last-date-received
 @end example
 
-would mean that if a new message is received in a
-thread, that thread becomes the last one displayed (or the first, if
-you have ‘@samp{set sort=reverse-threads}’.)
+would mean that if a new message is received in a sub-thread,
+that sub-thread becomes the last one displayed.
 
 Note: For reversed-threads $sort (@pxref{sort})
 order, $sort_aux (@pxref{sort_aux}) is reversed again (which is not the right thing to do,
 but kept to not break any existing configuration setting).
 
-@node sort_browser, sort_re, sort_aux, Configuration Variables
+@node sort_browser, sort_browser_mailboxes, sort_aux, Configuration Variables
 @subsection sort_browser
 
 @display
@@ -16145,7 +16609,43 @@ unsorted
 You may optionally use the ‘reverse-’ prefix to specify reverse sorting
 order (example: ‘@samp{set sort_browser=reverse-date}’).
 
-@node sort_re, spam_separator, sort_browser, Configuration Variables
+@node sort_browser_mailboxes, sort_re, sort_browser, Configuration Variables
+@subsection sort_browser_mailboxes
+
+@display
+Type: sort order
+Default: unsorted
+@end display
+
+Specifies how to sort entries in the mailbox browser.  By default, the
+entries are unsorted, displayed in the same order as listed
+in the ‘mailboxes’ command.  Valid values:
+
+@itemize 
+
+@item
+alpha (alphabetically)
+
+@item
+count
+
+@item
+date
+
+@item
+size
+
+@item
+unread
+
+@item
+unsorted
+@end itemize
+
+You may optionally use the ‘reverse-’ prefix to specify reverse sorting
+order (example: ‘@samp{set sort_browser_mailboxes=reverse-alpha}’).
+
+@node sort_re, sort_thread_groups, sort_browser_mailboxes, Configuration Variables
 @subsection sort_re
 
 @display
@@ -16162,7 +16662,33 @@ setting of $reply_regexp (@pxref{reply_regexp}).  With $sort_re (@pxref{sort_re}
 the message whether or not this is the case, as long as the
 non-$reply_regexp (@pxref{reply_regexp}) parts of both messages are identical.
 
-@node spam_separator, spoolfile, sort_re, Configuration Variables
+@node sort_thread_groups, spam_separator, sort_re, Configuration Variables
+@subsection sort_thread_groups
+
+@display
+Type: sort order
+Default: aux
+@end display
+
+When sorting by threads, this variable controls how threads are
+sorted in relation to other threads (at the top/root level).
+This can be set to any value that $sort (@pxref{sort}) can, except ‘threads’.
+You can also specify the ‘last-’ prefix in addition to the
+‘reverse-’ prefix, but ‘last-’ must come after ‘reverse-’.
+The ‘last-’ prefix causes messages to be sorted against its
+siblings by which has the last descendant, using the rest of
+$sort_thread_groups (@pxref{sort_thread_groups}) as an ordering.
+
+For backward compatibility, the default value is ‘aux’, which
+means to use $sort_aux (@pxref{sort_aux}) for top-level thread sorting too.  The
+value ‘aux’ does not respect ‘last-’ or ‘reverse-’
+prefixes, it simply delegates sorting directly to $sort_aux (@pxref{sort_aux}).
+
+Note: For reversed-threads $sort (@pxref{sort}) order, $sort_thread_groups (@pxref{sort_thread_groups}) is
+reversed again (which is not the right thing to do, but kept to
+not break any existing configuration setting).
+
+@node spam_separator, spoolfile, sort_thread_groups, Configuration Variables
 @subsection spam_separator
 
 @display
@@ -16358,7 +16884,7 @@ certificate that is either not yet valid or already expired. You should
 only unset this for particular known hosts, using the
 @samp{<account-hook> (@pxref{Managing Multiple Accounts})} function.
 
-@node ssl_verify_host, ssl_verify_partial_chains, ssl_verify_dates, Configuration Variables
+@node ssl_verify_host, ssl_verify_host_override, ssl_verify_dates, Configuration Variables
 @subsection ssl_verify_host
 
 @display
@@ -16371,7 +16897,20 @@ certificate whose host name does not match the host used in your folder
 URL. You should only unset this for particular known hosts, using
 the @samp{<account-hook> (@pxref{Managing Multiple Accounts})} function.
 
-@node ssl_verify_partial_chains, ssl_ciphers, ssl_verify_host, Configuration Variables
+@node ssl_verify_host_override, ssl_verify_partial_chains, ssl_verify_host, Configuration Variables
+@subsection ssl_verify_host_override
+
+@display
+Type: string
+Default: (empty)
+@end display
+
+Defines an alternate host name to verify the server certificate against.
+This should not be set unless you are sure what you are doing, but it
+might be useful for connection to a .onion host without a properly
+configured host name in the certificate.  See $ssl_verify_host (@pxref{ssl_verify_host}).
+
+@node ssl_verify_partial_chains, ssl_ciphers, ssl_verify_host_override, Configuration Variables
 @subsection ssl_verify_partial_chains
 
 @display
@@ -16430,7 +16969,7 @@ forwarding, etc. are not permitted in this mode).
 
 @display
 Type: string (localized)
-Default: ‘-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]---(%s/%S)-%>-(%P)---’
+Default: ‘-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]---(%s/%?T?%T/?%S)-%>-(%P)---’
 @end display
 
 Controls the format of the status line displayed in the ‘index’
@@ -16478,6 +17017,8 @@ according to $status_chars (@pxref{status_chars})
 %S  @tab current aux sorting method ($sort_aux (@pxref{sort_aux}))
 @item
 %t  @tab number of tagged messages *
+@item
+%T  @tab current thread group sorting method ($sort_thread_groups (@pxref{sort_thread_groups})) *
 @item
 %u  @tab number of unread messages *
 @item
@@ -16600,7 +17141,7 @@ Type: boolean
 Default: yes
 @end display
 
-Affects the @samp{~b} and @samp{~h} search operations described in
+Affects the @samp{~b}, @samp{~B}, and @samp{~h} search operations described in
 section ‘patterns (@pxref{Patterns; Searching; Limiting and Tagging})’.  If @emph{set}, the headers and body/attachments of
 messages to be searched are decoded before searching. If @emph{unset},
 messages are searched as they appear in the folder.
@@ -16813,10 +17354,11 @@ Type: boolean
 Default: yes
 @end display
 
-When @emph{set}, Mutt will automatically uncollapse any collapsed thread
-that receives a new message. When @emph{unset}, collapsed threads will
-remain collapsed. the presence of the new message will still affect
-index sorting, though.
+When @emph{set}, Mutt will automatically uncollapse any collapsed
+thread that receives a newly delivered message.  When
+@emph{unset}, collapsed threads will remain collapsed. The
+presence of the newly delivered message will still affect index
+sorting, though.
 
 @node use_8bitmime, use_domain, uncollapse_new, Configuration Variables
 @subsection use_8bitmime
@@ -17059,6 +17601,7 @@ command.
 * Mixmaster Menu::
 * Editor Menu::
 * Autocrypt Account Menu::
+* List Menu: List Menu <1>.
 @end menu
 
 @node Generic Menu, Index Menu, , Functions <1>
@@ -17078,73 +17621,109 @@ bindings for all menus (except as noted).
 @item
 Function@tab Default key@tab Description
 @item
-@samp{<top-page>}@tab H@tab move to the top of the page
-@item
-@samp{<next-entry>}@tab j@tab move to the next entry
-@item
-@samp{<previous-entry>}@tab k@tab move to the previous entry
-@item
 @samp{<bottom-page>}@tab L@tab move to the bottom of the page
 @item
-@samp{<refresh>}@tab ^L@tab clear and redraw the screen
+@samp{<check-stats>}@tab @tab calculate message statistics for all mailboxes
 @item
-@samp{<middle-page>}@tab M@tab move to the middle of the page
+@samp{<current-bottom>}@tab @tab move entry to bottom of screen
 @item
-@samp{<search-next>}@tab n@tab search for next match
+@samp{<current-middle>}@tab @tab move entry to middle of screen
 @item
-@samp{<exit>}@tab q@tab exit this menu
+@samp{<current-top>}@tab @tab move entry to top of screen
 @item
-@samp{<tag-entry>}@tab t@tab tag the current entry
-@item
-@samp{<next-page>}@tab z@tab move to the next page
-@item
-@samp{<previous-page>}@tab Z@tab move to the previous page
-@item
-@samp{<last-entry>}@tab *@tab move to the last entry
-@item
-@samp{<first-entry>}@tab =@tab move to the first entry
+@samp{<end-cond>}@tab @tab end of conditional execution (noop)
 @item
 @samp{<enter-command>}@tab :@tab enter a muttrc command
 @item
-@samp{<next-line>}@tab >@tab scroll down one line
+@samp{<error-history>}@tab @tab display recent history of error messages
 @item
-@samp{<previous-line>}@tab <@tab scroll up one line
+@samp{<exit>}@tab q@tab exit this menu
 @item
-@samp{<half-up>}@tab [@tab scroll up 1/2 page
+@samp{<first-entry>}@tab <Home>@tab move to the first entry
+@item
+@samp{<first-entry>}@tab =@tab move to the first entry
 @item
 @samp{<half-down>}@tab ]@tab scroll down 1/2 page
 @item
+@samp{<half-up>}@tab [@tab scroll up 1/2 page
+@item
 @samp{<help>}@tab ?@tab this screen
+@item
+@samp{<jump>}@tab 1@tab jump to an index number
+@item
+@samp{<jump>}@tab 2@tab jump to an index number
+@item
+@samp{<jump>}@tab 3@tab jump to an index number
+@item
+@samp{<jump>}@tab 4@tab jump to an index number
+@item
+@samp{<jump>}@tab 5@tab jump to an index number
+@item
+@samp{<jump>}@tab 6@tab jump to an index number
+@item
+@samp{<jump>}@tab 7@tab jump to an index number
+@item
+@samp{<jump>}@tab 8@tab jump to an index number
+@item
+@samp{<jump>}@tab 9@tab jump to an index number
+@item
+@samp{<last-entry>}@tab <End>@tab move to the last entry
+@item
+@samp{<last-entry>}@tab *@tab move to the last entry
+@item
+@samp{<middle-page>}@tab M@tab move to the middle of the page
+@item
+@samp{<next-entry>}@tab <Down>@tab move to the next entry
+@item
+@samp{<next-entry>}@tab j@tab move to the next entry
+@item
+@samp{<next-line>}@tab >@tab scroll down one line
+@item
+@samp{<next-page>}@tab <Pagedown>@tab move to the next page
+@item
+@samp{<next-page>}@tab <Right>@tab move to the next page
+@item
+@samp{<next-page>}@tab z@tab move to the next page
+@item
+@samp{<previous-entry>}@tab <Up>@tab move to the previous entry
+@item
+@samp{<previous-entry>}@tab k@tab move to the previous entry
+@item
+@samp{<previous-line>}@tab <@tab scroll up one line
+@item
+@samp{<previous-page>}@tab <Left>@tab move to the previous page
+@item
+@samp{<previous-page>}@tab <Pageup>@tab move to the previous page
+@item
+@samp{<previous-page>}@tab Z@tab move to the previous page
+@item
+@samp{<refresh>}@tab ^L@tab clear and redraw the screen
+@item
+@samp{<search>}@tab /@tab search for a regular expression
+@item
+@samp{<search-next>}@tab n@tab search for next match
+@item
+@samp{<search-opposite>}@tab @tab search for next match in opposite direction
+@item
+@samp{<search-reverse>}@tab Esc /@tab search backwards for a regular expression
+@item
+@samp{<select-entry>}@tab <Enter>@tab select the current entry
+@item
+@samp{<select-entry>}@tab <Keypadenter>@tab select the current entry
+@item
+@samp{<select-entry>}@tab <Return>@tab select the current entry
+@item
+@samp{<shell-escape>}@tab !@tab invoke a command in a subshell
+@item
+@samp{<tag-entry>}@tab t@tab tag the current entry
 @item
 @samp{<tag-prefix>}@tab ;@tab apply next function to tagged messages
 @item
 @samp{<tag-prefix-cond>}@tab @tab apply next function ONLY to tagged messages
 @item
-@samp{<end-cond>}@tab @tab end of conditional execution (noop)
-@item
-@samp{<shell-escape>}@tab !@tab invoke a command in a subshell
-@item
-@samp{<select-entry>}@tab MUTT_ENTER_S@tab select the current entry
-@item
-@samp{<search>}@tab /@tab search for a regular expression
-@item
-@samp{<search-reverse>}@tab Esc /@tab search backwards for a regular expression
-@item
-@samp{<search-opposite>}@tab @tab search for next match in opposite direction
-@item
-@samp{<jump>}@tab @tab jump to an index number
-@item
-@samp{<current-top>}@tab @tab move entry to top of screen
-@item
-@samp{<current-middle>}@tab @tab move entry to middle of screen
-@item
-@samp{<current-bottom>}@tab @tab move entry to bottom of screen
-@item
-@samp{<error-history>}@tab @tab display recent history of error messages
+@samp{<top-page>}@tab H@tab move to the top of the page
 @item
 @samp{<what-key>}@tab @tab display the keycode for a key press
-@item
-@samp{<check-stats>}@tab @tab calculate message statistics for all mailboxes
 @end multitable
 
 @node Index Menu, Pager Menu, Generic Menu, Functions <1>
@@ -17159,8 +17738,6 @@ Function@tab Default key@tab Description
 @item
 Function@tab Default key@tab Description
 @item
-@samp{<create-alias>}@tab a@tab create an alias from a message sender
-@item
 @samp{<autocrypt-acct-menu>}@tab A@tab manage autocrypt accounts
 @item
 @samp{<background-compose-menu>}@tab B@tab list and select backgrounded compose sessions
@@ -17173,31 +17750,53 @@ Function@tab Default key@tab Description
 @item
 @samp{<browse-mailboxes-readonly>}@tab @tab select a new mailbox from the browser in read only mode
 @item
+@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
+@item
 @samp{<change-folder>}@tab c@tab open a different folder
 @item
 @samp{<change-folder-readonly>}@tab Esc c@tab open a different folder in read only mode
 @item
-@samp{<next-unread-mailbox>}@tab @tab open next mailbox with new mail
+@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
 @item
-@samp{<collapse-thread>}@tab Esc v@tab collapse/uncollapse current thread
+@samp{<clear-flag>}@tab W@tab clear a status flag from a message
 @item
 @samp{<collapse-all>}@tab Esc V@tab collapse/uncollapse all threads
+@item
+@samp{<collapse-thread>}@tab Esc v@tab collapse/uncollapse current thread
 @item
 @samp{<compose-to-sender>}@tab @tab compose new message to the current message sender
 @item
 @samp{<copy-message>}@tab C@tab copy a message to a file/mailbox
 @item
+@samp{<create-alias>}@tab a@tab create an alias from a message sender
+@item
 @samp{<decode-copy>}@tab Esc C@tab make decoded (text/plain) copy
 @item
 @samp{<decode-save>}@tab Esc s@tab make decoded copy (text/plain) and delete
+@item
+@samp{<decrypt-copy>}@tab @tab make decrypted copy
+@item
+@samp{<decrypt-save>}@tab @tab make decrypted copy and delete
 @item
 @samp{<delete-message>}@tab d@tab delete the current entry
 @item
 @samp{<delete-pattern>}@tab D@tab delete messages matching a pattern
 @item
+@samp{<delete-subthread>}@tab Esc d@tab delete all messages in subthread
+@item
 @samp{<delete-thread>}@tab ^D@tab delete all messages in thread
 @item
-@samp{<delete-subthread>}@tab Esc d@tab delete all messages in subthread
+@samp{<display-address>}@tab @@@tab display full address of sender
+@item
+@samp{<display-message>}@tab <Enter>@tab display a message
+@item
+@samp{<display-message>}@tab <Keypadenter>@tab display a message
+@item
+@samp{<display-message>}@tab <Return>@tab display a message
+@item
+@samp{<display-message>}@tab <Space>@tab display a message
+@item
+@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
 @item
 @samp{<edit>}@tab e@tab edit the raw message
 @item
@@ -17205,41 +17804,79 @@ Function@tab Default key@tab Description
 @item
 @samp{<edit-type>}@tab ^E@tab edit attachment content type
 @item
-@samp{<forward-message>}@tab f@tab forward a message with comments
+@samp{<exit>}@tab x@tab exit this menu
+@item
+@samp{<extract-keys>}@tab ^K@tab extract supported public keys
+@item
+@samp{<fetch-mail>}@tab G@tab retrieve mail from POP server
 @item
 @samp{<flag-message>}@tab F@tab toggle a message's 'important' flag
+@item
+@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
+@item
+@samp{<forward-message>}@tab f@tab forward a message with comments
 @item
 @samp{<group-chat-reply>}@tab @tab reply to all recipients preserving To/Cc
 @item
 @samp{<group-reply>}@tab g@tab reply to all recipients
 @item
-@samp{<fetch-mail>}@tab G@tab retrieve mail from POP server
-@item
 @samp{<imap-fetch-mail>}@tab @tab force retrieval of mail from IMAP server
 @item
 @samp{<imap-logout-all>}@tab @tab logout from all IMAP servers
-@item
-@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
-@item
-@samp{<next-undeleted>}@tab j@tab move to the next undeleted message
-@item
-@samp{<previous-undeleted>}@tab k@tab move to the previous undeleted message
 @item
 @samp{<limit>}@tab l@tab show only messages matching a pattern
 @item
 @samp{<link-threads>}@tab &@tab link tagged message to the current one
 @item
+@samp{<list-action>}@tab Esc L@tab perform mailing list action
+@item
 @samp{<list-reply>}@tab L@tab reply to specified mailing list
 @item
 @samp{<mail>}@tab m@tab compose a new mail message
 @item
-@samp{<toggle-new>}@tab N@tab toggle a message's 'new' flag
+@samp{<mail-key>}@tab Esc k@tab mail a PGP public key
 @item
-@samp{<toggle-write>}@tab %@tab toggle whether the mailbox will be rewritten
+@samp{<mark-message>}@tab ~@tab create a hotkey macro for the current message
+@item
+@samp{<next-entry>}@tab J@tab move to the next entry
+@item
+@samp{<next-new>}@tab @tab jump to the next new message
+@item
+@samp{<next-new-then-unread>}@tab <Tab>@tab jump to the next new or unread message
+@item
+@samp{<next-subthread>}@tab Esc n@tab jump to the next subthread
 @item
 @samp{<next-thread>}@tab ^N@tab jump to the next thread
 @item
-@samp{<next-subthread>}@tab Esc n@tab jump to the next subthread
+@samp{<next-undeleted>}@tab <Down>@tab move to the next undeleted message
+@item
+@samp{<next-undeleted>}@tab j@tab move to the next undeleted message
+@item
+@samp{<next-unread>}@tab @tab jump to the next unread message
+@item
+@samp{<next-unread-mailbox>}@tab @tab open next mailbox with new mail
+@item
+@samp{<parent-message>}@tab P@tab jump to parent message in thread
+@item
+@samp{<pipe-message>}@tab |@tab pipe message/attachment to a shell command
+@item
+@samp{<previous-entry>}@tab K@tab move to the previous entry
+@item
+@samp{<previous-new>}@tab @tab jump to the previous new message
+@item
+@samp{<previous-new-then-unread>}@tab Esc <Tab>@tab jump to the previous new or unread message
+@item
+@samp{<previous-subthread>}@tab Esc p@tab jump to previous subthread
+@item
+@samp{<previous-thread>}@tab ^P@tab jump to previous thread
+@item
+@samp{<previous-undeleted>}@tab <Up>@tab move to the previous undeleted message
+@item
+@samp{<previous-undeleted>}@tab k@tab move to the previous undeleted message
+@item
+@samp{<previous-unread>}@tab @tab jump to the previous unread message
+@item
+@samp{<print-message>}@tab p@tab print the current entry
 @item
 @samp{<purge-message>}@tab @tab delete the current entry, bypassing the trash folder
 @item
@@ -17247,93 +17884,25 @@ Function@tab Default key@tab Description
 @item
 @samp{<quit>}@tab q@tab save changes to mailbox and quit
 @item
-@samp{<reply>}@tab r@tab reply to a message
-@item
-@samp{<show-limit>}@tab Esc l@tab show currently active limit pattern
-@item
-@samp{<sort-mailbox>}@tab o@tab sort messages
-@item
-@samp{<sort-reverse>}@tab O@tab sort messages in reverse order
-@item
-@samp{<print-message>}@tab p@tab print the current entry
-@item
-@samp{<previous-thread>}@tab ^P@tab jump to previous thread
-@item
-@samp{<previous-subthread>}@tab Esc p@tab jump to previous subthread
-@item
-@samp{<recall-message>}@tab R@tab recall a postponed message
+@samp{<read-subthread>}@tab Esc r@tab mark the current subthread as read
 @item
 @samp{<read-thread>}@tab ^R@tab mark the current thread as read
 @item
-@samp{<read-subthread>}@tab Esc r@tab mark the current subthread as read
+@samp{<recall-message>}@tab R@tab recall a postponed message
+@item
+@samp{<reply>}@tab r@tab reply to a message
 @item
 @samp{<resend-message>}@tab Esc e@tab use the current message as a template for a new one
 @item
+@samp{<root-message>}@tab @tab jump to root message in thread
+@item
 @samp{<save-message>}@tab s@tab save message/attachment to a mailbox/file
-@item
-@samp{<tag-pattern>}@tab T@tab tag messages matching a pattern
-@item
-@samp{<tag-subthread>}@tab @tab tag the current subthread
-@item
-@samp{<tag-thread>}@tab Esc t@tab tag the current thread
-@item
-@samp{<untag-pattern>}@tab ^T@tab untag messages matching a pattern
-@item
-@samp{<undelete-message>}@tab u@tab undelete the current entry
-@item
-@samp{<undelete-pattern>}@tab U@tab undelete messages matching a pattern
-@item
-@samp{<undelete-subthread>}@tab Esc u@tab undelete all messages in subthread
-@item
-@samp{<undelete-thread>}@tab ^U@tab undelete all messages in thread
-@item
-@samp{<view-attachments>}@tab v@tab show MIME attachments
-@item
-@samp{<show-version>}@tab V@tab show the Mutt version number and date
 @item
 @samp{<set-flag>}@tab w@tab set a status flag on a message
 @item
-@samp{<clear-flag>}@tab W@tab clear a status flag from a message
+@samp{<show-limit>}@tab Esc l@tab show currently active limit pattern
 @item
-@samp{<display-message>}@tab MUTT_ENTER_S@tab display a message
-@item
-@samp{<mark-message>}@tab ~@tab create a hotkey macro for the current message
-@item
-@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
-@item
-@samp{<sync-mailbox>}@tab $@tab save changes to mailbox
-@item
-@samp{<display-address>}@tab @@@tab display full address of sender
-@item
-@samp{<pipe-message>}@tab |@tab pipe message/attachment to a shell command
-@item
-@samp{<next-new>}@tab @tab jump to the next new message
-@item
-@samp{<next-new-then-unread>}@tab <Tab>@tab jump to the next new or unread message
-@item
-@samp{<previous-new>}@tab @tab jump to the previous new message
-@item
-@samp{<previous-new-then-unread>}@tab Esc <Tab>@tab jump to the previous new or unread message
-@item
-@samp{<next-unread>}@tab @tab jump to the next unread message
-@item
-@samp{<previous-unread>}@tab @tab jump to the previous unread message
-@item
-@samp{<parent-message>}@tab P@tab jump to parent message in thread
-@item
-@samp{<root-message>}@tab @tab jump to root message in thread
-@item
-@samp{<extract-keys>}@tab ^K@tab extract supported public keys
-@item
-@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
-@item
-@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
-@item
-@samp{<mail-key>}@tab Esc k@tab mail a PGP public key
-@item
-@samp{<decrypt-copy>}@tab @tab make decrypted copy
-@item
-@samp{<decrypt-save>}@tab @tab make decrypted copy and delete
+@samp{<show-version>}@tab V@tab show the Mutt version number and date
 @item
 @samp{<sidebar-first>}@tab @tab move the highlight to the first mailbox
 @item
@@ -17354,6 +17923,34 @@ Function@tab Default key@tab Description
 @samp{<sidebar-prev-new>}@tab @tab move the highlight to previous mailbox with new mail
 @item
 @samp{<sidebar-toggle-visible>}@tab @tab make the sidebar (in)visible
+@item
+@samp{<sort-mailbox>}@tab o@tab sort messages
+@item
+@samp{<sort-reverse>}@tab O@tab sort messages in reverse order
+@item
+@samp{<sync-mailbox>}@tab $@tab save changes to mailbox
+@item
+@samp{<tag-pattern>}@tab T@tab tag messages matching a pattern
+@item
+@samp{<tag-subthread>}@tab @tab tag the current subthread
+@item
+@samp{<tag-thread>}@tab Esc t@tab tag the current thread
+@item
+@samp{<toggle-new>}@tab N@tab toggle a message's 'new' flag
+@item
+@samp{<toggle-write>}@tab %@tab toggle whether the mailbox will be rewritten
+@item
+@samp{<undelete-message>}@tab u@tab undelete the current entry
+@item
+@samp{<undelete-pattern>}@tab U@tab undelete messages matching a pattern
+@item
+@samp{<undelete-subthread>}@tab Esc u@tab undelete all messages in subthread
+@item
+@samp{<undelete-thread>}@tab ^U@tab undelete all messages in thread
+@item
+@samp{<untag-pattern>}@tab ^T@tab untag messages matching a pattern
+@item
+@samp{<view-attachments>}@tab v@tab show MIME attachments
 @end multitable
 
 @node Pager Menu, Alias Menu <1>, Index Menu, Functions <1>
@@ -17370,37 +17967,51 @@ Function@tab Default key@tab Description
 @item
 @samp{<background-compose-menu>}@tab B@tab list and select backgrounded compose sessions
 @item
+@samp{<bottom>}@tab <End>@tab jump to the bottom of the message
+@item
+@samp{<bounce-message>}@tab b@tab remail a message to another user
+@item
 @samp{<break-thread>}@tab #@tab break the thread in two
 @item
 @samp{<browse-mailboxes>}@tab y@tab select a new mailbox from the browser
 @item
 @samp{<browse-mailboxes-readonly>}@tab @tab select a new mailbox from the browser in read only mode
 @item
-@samp{<create-alias>}@tab a@tab create an alias from a message sender
-@item
-@samp{<bounce-message>}@tab b@tab remail a message to another user
+@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
 @item
 @samp{<change-folder>}@tab c@tab open a different folder
 @item
 @samp{<change-folder-readonly>}@tab Esc c@tab open a different folder in read only mode
 @item
-@samp{<next-unread-mailbox>}@tab @tab open next mailbox with new mail
+@samp{<check-stats>}@tab @tab calculate message statistics for all mailboxes
+@item
+@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
+@item
+@samp{<clear-flag>}@tab W@tab clear a status flag from a message
 @item
 @samp{<compose-to-sender>}@tab @tab compose new message to the current message sender
 @item
 @samp{<copy-message>}@tab C@tab copy a message to a file/mailbox
 @item
+@samp{<create-alias>}@tab a@tab create an alias from a message sender
+@item
 @samp{<decode-copy>}@tab Esc C@tab make decoded (text/plain) copy
+@item
+@samp{<decode-save>}@tab Esc s@tab make decoded copy (text/plain) and delete
+@item
+@samp{<decrypt-copy>}@tab @tab make decrypted copy
+@item
+@samp{<decrypt-save>}@tab @tab make decrypted copy and delete
 @item
 @samp{<delete-message>}@tab d@tab delete the current entry
 @item
-@samp{<delete-thread>}@tab ^D@tab delete all messages in thread
-@item
 @samp{<delete-subthread>}@tab Esc d@tab delete all messages in subthread
 @item
-@samp{<set-flag>}@tab w@tab set a status flag on a message
+@samp{<delete-thread>}@tab ^D@tab delete all messages in thread
 @item
-@samp{<clear-flag>}@tab W@tab clear a status flag from a message
+@samp{<display-address>}@tab @@@tab display full address of sender
+@item
+@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
 @item
 @samp{<edit>}@tab e@tab edit the raw message
 @item
@@ -17408,161 +18019,163 @@ Function@tab Default key@tab Description
 @item
 @samp{<edit-type>}@tab ^E@tab edit attachment content type
 @item
-@samp{<forward-message>}@tab f@tab forward a message with comments
+@samp{<enter-command>}@tab :@tab enter a muttrc command
+@item
+@samp{<error-history>}@tab @tab display recent history of error messages
+@item
+@samp{<exit>}@tab i@tab exit this menu
+@item
+@samp{<exit>}@tab q@tab exit this menu
+@item
+@samp{<exit>}@tab x@tab exit this menu
+@item
+@samp{<extract-keys>}@tab ^K@tab extract supported public keys
 @item
 @samp{<flag-message>}@tab F@tab toggle a message's 'important' flag
+@item
+@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
+@item
+@samp{<forward-message>}@tab f@tab forward a message with comments
 @item
 @samp{<group-chat-reply>}@tab @tab reply to all recipients preserving To/Cc
 @item
 @samp{<group-reply>}@tab g@tab reply to all recipients
 @item
+@samp{<half-down>}@tab @tab scroll down 1/2 page
+@item
+@samp{<half-up>}@tab @tab scroll up 1/2 page
+@item
+@samp{<help>}@tab ?@tab this screen
+@item
 @samp{<imap-fetch-mail>}@tab @tab force retrieval of mail from IMAP server
 @item
 @samp{<imap-logout-all>}@tab @tab logout from all IMAP servers
 @item
-@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
+@samp{<jump>}@tab 1@tab jump to an index number
 @item
-@samp{<next-undeleted>}@tab j@tab move to the next undeleted message
+@samp{<jump>}@tab 2@tab jump to an index number
 @item
-@samp{<next-entry>}@tab J@tab move to the next entry
+@samp{<jump>}@tab 3@tab jump to an index number
 @item
-@samp{<previous-undeleted>}@tab k@tab move to the previous undeleted message
+@samp{<jump>}@tab 4@tab jump to an index number
 @item
-@samp{<previous-entry>}@tab K@tab move to the previous entry
+@samp{<jump>}@tab 5@tab jump to an index number
+@item
+@samp{<jump>}@tab 6@tab jump to an index number
+@item
+@samp{<jump>}@tab 7@tab jump to an index number
+@item
+@samp{<jump>}@tab 8@tab jump to an index number
+@item
+@samp{<jump>}@tab 9@tab jump to an index number
 @item
 @samp{<link-threads>}@tab &@tab link tagged message to the current one
 @item
-@samp{<list-reply>}@tab L@tab reply to specified mailing list
+@samp{<list-action>}@tab Esc L@tab perform mailing list action
 @item
-@samp{<redraw-screen>}@tab ^L@tab clear and redraw the screen
+@samp{<list-reply>}@tab L@tab reply to specified mailing list
 @item
 @samp{<mail>}@tab m@tab compose a new mail message
 @item
+@samp{<mail-key>}@tab Esc k@tab mail a PGP public key
+@item
 @samp{<mark-as-new>}@tab N@tab toggle a message's 'new' flag
 @item
-@samp{<toggle-write>}@tab %@tab toggle whether the mailbox will be rewritten
+@samp{<next-entry>}@tab J@tab move to the next entry
 @item
-@samp{<search-next>}@tab n@tab search for next match
+@samp{<next-line>}@tab <Enter>@tab scroll down one line
 @item
-@samp{<next-thread>}@tab ^N@tab jump to the next thread
+@samp{<next-line>}@tab <Keypadenter>@tab scroll down one line
+@item
+@samp{<next-line>}@tab <Return>@tab scroll down one line
+@item
+@samp{<next-new>}@tab @tab jump to the next new message
+@item
+@samp{<next-new-then-unread>}@tab <Tab>@tab jump to the next new or unread message
+@item
+@samp{<next-page>}@tab <Pagedown>@tab move to the next page
+@item
+@samp{<next-page>}@tab <Space>@tab move to the next page
 @item
 @samp{<next-subthread>}@tab Esc n@tab jump to the next subthread
 @item
-@samp{<sort-mailbox>}@tab o@tab sort messages
+@samp{<next-thread>}@tab ^N@tab jump to the next thread
 @item
-@samp{<sort-reverse>}@tab O@tab sort messages in reverse order
+@samp{<next-undeleted>}@tab <Down>@tab move to the next undeleted message
 @item
-@samp{<print-message>}@tab p@tab print the current entry
+@samp{<next-undeleted>}@tab <Right>@tab move to the next undeleted message
+@item
+@samp{<next-undeleted>}@tab j@tab move to the next undeleted message
+@item
+@samp{<next-unread>}@tab @tab jump to the next unread message
+@item
+@samp{<next-unread-mailbox>}@tab @tab open next mailbox with new mail
+@item
+@samp{<parent-message>}@tab P@tab jump to parent message in thread
+@item
+@samp{<pipe-message>}@tab |@tab pipe message/attachment to a shell command
+@item
+@samp{<previous-entry>}@tab K@tab move to the previous entry
+@item
+@samp{<previous-line>}@tab <Backspace>@tab scroll up one line
+@item
+@samp{<previous-new>}@tab @tab jump to the previous new message
+@item
+@samp{<previous-new-then-unread>}@tab @tab jump to the previous new or unread message
+@item
+@samp{<previous-page>}@tab <Pageup>@tab move to the previous page
+@item
+@samp{<previous-page>}@tab -@tab move to the previous page
+@item
+@samp{<previous-subthread>}@tab Esc p@tab jump to previous subthread
 @item
 @samp{<previous-thread>}@tab ^P@tab jump to previous thread
 @item
-@samp{<previous-subthread>}@tab Esc p@tab jump to previous subthread
+@samp{<previous-undeleted>}@tab <Left>@tab move to the previous undeleted message
+@item
+@samp{<previous-undeleted>}@tab <Up>@tab move to the previous undeleted message
+@item
+@samp{<previous-undeleted>}@tab k@tab move to the previous undeleted message
+@item
+@samp{<previous-unread>}@tab @tab jump to the previous unread message
+@item
+@samp{<print-message>}@tab p@tab print the current entry
 @item
 @samp{<purge-message>}@tab @tab delete the current entry, bypassing the trash folder
 @item
 @samp{<quit>}@tab Q@tab save changes to mailbox and quit
 @item
-@samp{<exit>}@tab q@tab exit this menu
-@item
-@samp{<reply>}@tab r@tab reply to a message
-@item
-@samp{<recall-message>}@tab R@tab recall a postponed message
+@samp{<read-subthread>}@tab Esc r@tab mark the current subthread as read
 @item
 @samp{<read-thread>}@tab ^R@tab mark the current thread as read
 @item
-@samp{<read-subthread>}@tab Esc r@tab mark the current subthread as read
+@samp{<recall-message>}@tab R@tab recall a postponed message
+@item
+@samp{<redraw-screen>}@tab ^L@tab clear and redraw the screen
+@item
+@samp{<reply>}@tab r@tab reply to a message
 @item
 @samp{<resend-message>}@tab Esc e@tab use the current message as a template for a new one
 @item
+@samp{<root-message>}@tab @tab jump to root message in thread
+@item
 @samp{<save-message>}@tab s@tab save message/attachment to a mailbox/file
-@item
-@samp{<skip-quoted>}@tab S@tab skip beyond quoted text
-@item
-@samp{<decode-save>}@tab Esc s@tab make decoded copy (text/plain) and delete
-@item
-@samp{<tag-message>}@tab t@tab tag the current entry
-@item
-@samp{<toggle-quoted>}@tab T@tab toggle display of quoted text
-@item
-@samp{<undelete-message>}@tab u@tab undelete the current entry
-@item
-@samp{<undelete-subthread>}@tab Esc u@tab undelete all messages in subthread
-@item
-@samp{<undelete-thread>}@tab ^U@tab undelete all messages in thread
-@item
-@samp{<view-attachments>}@tab v@tab show MIME attachments
-@item
-@samp{<show-version>}@tab V@tab show the Mutt version number and date
-@item
-@samp{<search-toggle>}@tab \\@tab toggle search pattern coloring
-@item
-@samp{<display-address>}@tab @@@tab display full address of sender
-@item
-@samp{<next-new>}@tab @tab jump to the next new message
-@item
-@samp{<pipe-message>}@tab |@tab pipe message/attachment to a shell command
-@item
-@samp{<help>}@tab ?@tab this screen
-@item
-@samp{<next-page>}@tab <Space>@tab move to the next page
-@item
-@samp{<previous-page>}@tab -@tab move to the previous page
-@item
-@samp{<top>}@tab ^@tab jump to the top of the message
-@item
-@samp{<sync-mailbox>}@tab $@tab save changes to mailbox
-@item
-@samp{<shell-escape>}@tab !@tab invoke a command in a subshell
-@item
-@samp{<enter-command>}@tab :@tab enter a muttrc command
-@item
-@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
 @item
 @samp{<search>}@tab /@tab search for a regular expression
 @item
-@samp{<search-reverse>}@tab Esc /@tab search backwards for a regular expression
+@samp{<search-next>}@tab n@tab search for next match
 @item
 @samp{<search-opposite>}@tab @tab search for next match in opposite direction
 @item
-@samp{<next-line>}@tab MUTT_ENTER_S@tab scroll down one line
+@samp{<search-reverse>}@tab Esc /@tab search backwards for a regular expression
 @item
-@samp{<error-history>}@tab @tab display recent history of error messages
+@samp{<search-toggle>}@tab \\@tab toggle search pattern coloring
 @item
-@samp{<jump>}@tab @tab jump to an index number
+@samp{<set-flag>}@tab w@tab set a status flag on a message
 @item
-@samp{<next-unread>}@tab @tab jump to the next unread message
+@samp{<shell-escape>}@tab !@tab invoke a command in a subshell
 @item
-@samp{<previous-new>}@tab @tab jump to the previous new message
-@item
-@samp{<previous-unread>}@tab @tab jump to the previous unread message
-@item
-@samp{<half-up>}@tab @tab scroll up 1/2 page
-@item
-@samp{<half-down>}@tab @tab scroll down 1/2 page
-@item
-@samp{<previous-line>}@tab @tab scroll up one line
-@item
-@samp{<bottom>}@tab @tab jump to the bottom of the message
-@item
-@samp{<parent-message>}@tab P@tab jump to parent message in thread
-@item
-@samp{<root-message>}@tab @tab jump to root message in thread
-@item
-@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
-@item
-@samp{<mail-key>}@tab Esc k@tab mail a PGP public key
-@item
-@samp{<extract-keys>}@tab ^K@tab extract supported public keys
-@item
-@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
-@item
-@samp{<decrypt-copy>}@tab @tab make decrypted copy
-@item
-@samp{<decrypt-save>}@tab @tab make decrypted copy and delete
-@item
-@samp{<what-key>}@tab @tab display the keycode for a key press
-@item
-@samp{<check-stats>}@tab @tab calculate message statistics for all mailboxes
+@samp{<show-version>}@tab V@tab show the Mutt version number and date
 @item
 @samp{<sidebar-first>}@tab @tab move the highlight to the first mailbox
 @item
@@ -17583,6 +18196,36 @@ Function@tab Default key@tab Description
 @samp{<sidebar-prev-new>}@tab @tab move the highlight to previous mailbox with new mail
 @item
 @samp{<sidebar-toggle-visible>}@tab @tab make the sidebar (in)visible
+@item
+@samp{<skip-headers>}@tab H@tab skip beyond headers
+@item
+@samp{<skip-quoted>}@tab S@tab skip beyond quoted text
+@item
+@samp{<sort-mailbox>}@tab o@tab sort messages
+@item
+@samp{<sort-reverse>}@tab O@tab sort messages in reverse order
+@item
+@samp{<sync-mailbox>}@tab $@tab save changes to mailbox
+@item
+@samp{<tag-message>}@tab t@tab tag the current entry
+@item
+@samp{<toggle-quoted>}@tab T@tab toggle display of quoted text
+@item
+@samp{<toggle-write>}@tab %@tab toggle whether the mailbox will be rewritten
+@item
+@samp{<top>}@tab <Home>@tab jump to the top of the message
+@item
+@samp{<top>}@tab ^@tab jump to the top of the message
+@item
+@samp{<undelete-message>}@tab u@tab undelete the current entry
+@item
+@samp{<undelete-subthread>}@tab Esc u@tab undelete all messages in subthread
+@item
+@samp{<undelete-thread>}@tab ^U@tab undelete all messages in thread
+@item
+@samp{<view-attachments>}@tab v@tab show MIME attachments
+@item
+@samp{<what-key>}@tab @tab display the keycode for a key press
 @end multitable
 
 @node Alias Menu <1>, Query Menu, Pager Menu, Functions <1>
@@ -17598,6 +18241,8 @@ Function@tab Default key@tab Description
 Function@tab Default key@tab Description
 @item
 @samp{<delete-entry>}@tab d@tab delete the current entry
+@item
+@samp{<tag-entry>}@tab <Space>@tab tag the current entry
 @item
 @samp{<undelete-entry>}@tab u@tab undelete the current entry
 @end multitable
@@ -17637,23 +18282,23 @@ Function@tab Default key@tab Description
 @item
 @samp{<bounce-message>}@tab b@tab remail a message to another user
 @item
-@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
+@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
+@item
+@samp{<collapse-parts>}@tab v@tab Toggle display of subparts
 @item
 @samp{<compose-to-sender>}@tab @tab compose new message to the current message sender
 @item
+@samp{<delete-entry>}@tab d@tab delete the current entry
+@item
+@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
+@item
 @samp{<edit-type>}@tab ^E@tab edit attachment content type
 @item
-@samp{<print-entry>}@tab p@tab print the current entry
+@samp{<extract-keys>}@tab ^K@tab extract supported public keys
 @item
-@samp{<save-entry>}@tab s@tab save message/attachment to a mailbox/file
+@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
 @item
-@samp{<pipe-entry>}@tab |@tab pipe message/attachment to a shell command
-@item
-@samp{<view-mailcap>}@tab m@tab force viewing of attachment using mailcap
-@item
-@samp{<reply>}@tab r@tab reply to a message
-@item
-@samp{<resend-message>}@tab Esc e@tab use the current message as a template for a new one
+@samp{<forward-message>}@tab f@tab forward a message with comments
 @item
 @samp{<group-chat-reply>}@tab @tab reply to all recipients preserving To/Cc
 @item
@@ -17661,23 +18306,29 @@ Function@tab Default key@tab Description
 @item
 @samp{<list-reply>}@tab L@tab reply to specified mailing list
 @item
-@samp{<forward-message>}@tab f@tab forward a message with comments
+@samp{<pipe-entry>}@tab |@tab pipe message/attachment to a shell command
 @item
-@samp{<view-text>}@tab T@tab view attachment as text
+@samp{<print-entry>}@tab p@tab print the current entry
 @item
-@samp{<view-attach>}@tab MUTT_ENTER_S@tab view attachment using mailcap entry if necessary
+@samp{<reply>}@tab r@tab reply to a message
 @item
-@samp{<delete-entry>}@tab d@tab delete the current entry
+@samp{<resend-message>}@tab Esc e@tab use the current message as a template for a new one
+@item
+@samp{<save-entry>}@tab s@tab save message/attachment to a mailbox/file
 @item
 @samp{<undelete-entry>}@tab u@tab undelete the current entry
 @item
-@samp{<collapse-parts>}@tab v@tab Toggle display of subparts
+@samp{<view-attach>}@tab <Enter>@tab view attachment using mailcap entry if necessary
 @item
-@samp{<check-traditional-pgp>}@tab Esc P@tab check for classic PGP
+@samp{<view-attach>}@tab <Keypadenter>@tab view attachment using mailcap entry if necessary
 @item
-@samp{<extract-keys>}@tab ^K@tab extract supported public keys
+@samp{<view-attach>}@tab <Return>@tab view attachment using mailcap entry if necessary
 @item
-@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
+@samp{<view-mailcap>}@tab m@tab force viewing of attachment using mailcap
+@item
+@samp{<view-pager>}@tab @tab view attachment in pager using copiousoutput mailcap entry
+@item
+@samp{<view-text>}@tab T@tab view attachment as text
 @end multitable
 
 @node Compose Menu <2>, Postpone Menu, Attachment Menu <1>, Functions <1>
@@ -17694,55 +18345,39 @@ Function@tab Default key@tab Description
 @item
 @samp{<attach-file>}@tab a@tab attach file(s) to this message
 @item
+@samp{<attach-key>}@tab Esc k@tab attach a PGP public key
+@item
 @samp{<attach-message>}@tab A@tab attach message(s) to this message
 @item
-@samp{<edit-bcc>}@tab b@tab edit the BCC list
-@item
-@samp{<edit-cc>}@tab c@tab edit the CC list
+@samp{<autocrypt-menu>}@tab o@tab show autocrypt compose menu options
 @item
 @samp{<copy-file>}@tab C@tab save message/attachment to a mailbox/file
 @item
 @samp{<detach-file>}@tab D@tab delete the current entry
 @item
-@samp{<toggle-disposition>}@tab ^D@tab toggle disposition between inline/attachment
+@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
+@item
+@samp{<edit-bcc>}@tab b@tab edit the BCC list
+@item
+@samp{<edit-cc>}@tab c@tab edit the CC list
 @item
 @samp{<edit-description>}@tab d@tab edit attachment description
 @item
-@samp{<edit-message>}@tab e@tab edit the message
-@item
-@samp{<edit-headers>}@tab E@tab edit the message with headers
-@item
-@samp{<edit-file>}@tab ^X e@tab edit the file to be attached
-@item
 @samp{<edit-encoding>}@tab ^E@tab edit attachment transfer-encoding
-@item
-@samp{<edit-from>}@tab Esc f@tab edit the from field
 @item
 @samp{<edit-fcc>}@tab f@tab enter a file to save a copy of this message in
 @item
-@samp{<filter-entry>}@tab F@tab filter attachment through a shell command
+@samp{<edit-file>}@tab ^X e@tab edit the file to be attached
 @item
-@samp{<get-attachment>}@tab G@tab get a temporary copy of an attachment
+@samp{<edit-from>}@tab Esc f@tab edit the from field
 @item
-@samp{<display-toggle-weed>}@tab h@tab display message and toggle header weeding
+@samp{<edit-headers>}@tab E@tab edit the message with headers
 @item
-@samp{<ispell>}@tab i@tab run ispell on the message
-@item
-@samp{<print-entry>}@tab l@tab print the current entry
+@samp{<edit-message>}@tab e@tab edit the message
 @item
 @samp{<edit-mime>}@tab m@tab edit attachment using mailcap entry
 @item
-@samp{<new-mime>}@tab n@tab compose new attachment using mailcap entry
-@item
-@samp{<autocrypt-menu>}@tab o@tab show autocrypt compose menu options
-@item
-@samp{<postpone-message>}@tab P@tab save this message to send later
-@item
 @samp{<edit-reply-to>}@tab r@tab edit the Reply-To field
-@item
-@samp{<rename-attachment>}@tab ^O@tab send attachment with a different name
-@item
-@samp{<rename-file>}@tab R@tab rename/move an attached file
 @item
 @samp{<edit-subject>}@tab s@tab edit the subject of this message
 @item
@@ -17750,39 +18385,69 @@ Function@tab Default key@tab Description
 @item
 @samp{<edit-type>}@tab ^T@tab edit attachment content type
 @item
-@samp{<write-fcc>}@tab w@tab write the message to a folder
+@samp{<filter-entry>}@tab F@tab filter attachment through a shell command
 @item
-@samp{<toggle-unlink>}@tab u@tab toggle whether to delete file after sending it
+@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
 @item
-@samp{<toggle-recode>}@tab @tab toggle recoding of this attachment
+@samp{<get-attachment>}@tab G@tab get a temporary copy of an attachment
 @item
-@samp{<update-encoding>}@tab U@tab update an attachment's encoding info
+@samp{<ispell>}@tab i@tab run ispell on the message
 @item
-@samp{<view-attach>}@tab MUTT_ENTER_S@tab view attachment using mailcap entry if necessary
-@item
-@samp{<view-alt>}@tab v@tab view multipart/alternative
-@item
-@samp{<view-alt-text>}@tab Esc v@tab view multipart/alternative as text
-@item
-@samp{<view-alt-mailcap>}@tab V@tab view multipart/alternative using mailcap
-@item
-@samp{<send-message>}@tab y@tab send the message
-@item
-@samp{<pipe-entry>}@tab |@tab pipe message/attachment to a shell command
+@samp{<mix>}@tab M@tab send the message through a mixmaster remailer chain
 @item
 @samp{<move-down>}@tab @tab move attachment down in compose menu list
 @item
 @samp{<move-up>}@tab @tab move attachment up in compose menu list
 @item
-@samp{<attach-key>}@tab Esc k@tab attach a PGP public key
+@samp{<new-mime>}@tab n@tab compose new attachment using mailcap entry
 @item
 @samp{<pgp-menu>}@tab p@tab show PGP options
 @item
-@samp{<forget-passphrase>}@tab ^F@tab wipe passphrase(s) from memory
+@samp{<pipe-entry>}@tab |@tab pipe message/attachment to a shell command
+@item
+@samp{<postpone-message>}@tab P@tab save this message to send later
+@item
+@samp{<print-entry>}@tab l@tab print the current entry
+@item
+@samp{<rename-attachment>}@tab ^O@tab send attachment with a different name
+@item
+@samp{<rename-file>}@tab R@tab rename/move an attached file
+@item
+@samp{<send-message>}@tab y@tab send the message
 @item
 @samp{<smime-menu>}@tab S@tab show S/MIME options
 @item
-@samp{<mix>}@tab M@tab send the message through a mixmaster remailer chain
+@samp{<tag-entry>}@tab T@tab tag the current entry
+@item
+@samp{<toggle-disposition>}@tab ^D@tab toggle disposition between inline/attachment
+@item
+@samp{<toggle-recode>}@tab @tab toggle recoding of this attachment
+@item
+@samp{<toggle-unlink>}@tab u@tab toggle whether to delete file after sending it
+@item
+@samp{<update-encoding>}@tab U@tab update an attachment's encoding info
+@item
+@samp{<view-alt>}@tab v@tab view multipart/alternative
+@item
+@samp{<view-alt-mailcap>}@tab V@tab view multipart/alternative using mailcap
+@item
+@samp{<view-alt-pager>}@tab @tab view multipart/alternative in pager using copiousoutput mailcap entry
+@item
+@samp{<view-alt-text>}@tab Esc v@tab view multipart/alternative as text
+@item
+@samp{<view-attach>}@tab <Enter>@tab view attachment using mailcap entry if necessary
+@item
+@samp{<view-attach>}@tab <Keypadenter>@tab view attachment using mailcap entry if necessary
+@item
+@samp{<view-attach>}@tab <Return>@tab view attachment using mailcap entry if necessary
+@item
+@samp{<view-mailcap>}@tab @tab force viewing of attachment using mailcap
+@item
+@samp{<view-pager>}@tab @tab view attachment in pager using copiousoutput mailcap entry
+@item
+@samp{<view-text>}@tab @tab view attachment as text
+@item
+@samp{<write-fcc>}@tab w@tab write the message to a folder
 @end multitable
 
 @node Postpone Menu, Browser Menu, Compose Menu <2>, Functions <1>
@@ -17814,7 +18479,15 @@ Function@tab Default key@tab Description
 @item
 Function@tab Default key@tab Description
 @item
+@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
+@item
 @samp{<change-dir>}@tab c@tab change directories
+@item
+@samp{<check-new>}@tab @tab check mailboxes for new mail
+@item
+@samp{<create-mailbox>}@tab C@tab create a new mailbox (IMAP only)
+@item
+@samp{<delete-mailbox>}@tab d@tab delete the current mailbox (IMAP only)
 @item
 @samp{<descend-directory>}@tab @tab descend into a directory
 @item
@@ -17822,31 +18495,23 @@ Function@tab Default key@tab Description
 @item
 @samp{<enter-mask>}@tab m@tab enter a file mask
 @item
+@samp{<rename-mailbox>}@tab r@tab rename the current mailbox (IMAP only)
+@item
+@samp{<select-new>}@tab N@tab select a new file in this directory
+@item
 @samp{<sort>}@tab o@tab sort messages
 @item
 @samp{<sort-reverse>}@tab O@tab sort messages in reverse order
 @item
-@samp{<select-new>}@tab N@tab select a new file in this directory
-@item
-@samp{<check-new>}@tab @tab check mailboxes for new mail
+@samp{<subscribe>}@tab s@tab subscribe to current mailbox (IMAP only)
 @item
 @samp{<toggle-mailboxes>}@tab <Tab>@tab toggle whether to browse mailboxes or all files
 @item
-@samp{<view-file>}@tab <Space>@tab view file
-@item
-@samp{<buffy-list>}@tab .@tab list mailboxes with new mail
-@item
-@samp{<create-mailbox>}@tab C@tab create a new mailbox (IMAP only)
-@item
-@samp{<delete-mailbox>}@tab d@tab delete the current mailbox (IMAP only)
-@item
-@samp{<rename-mailbox>}@tab r@tab rename the current mailbox (IMAP only)
-@item
-@samp{<subscribe>}@tab s@tab subscribe to current mailbox (IMAP only)
+@samp{<toggle-subscribed>}@tab T@tab toggle view all/subscribed mailboxes (IMAP only)
 @item
 @samp{<unsubscribe>}@tab u@tab unsubscribe from current mailbox (IMAP only)
 @item
-@samp{<toggle-subscribed>}@tab T@tab toggle view all/subscribed mailboxes (IMAP only)
+@samp{<view-file>}@tab <Space>@tab view file
 @end multitable
 
 @node Pgp Menu, Smime Menu, Browser Menu, Functions <1>
@@ -17895,17 +18560,27 @@ Function@tab Default key@tab Description
 @item
 Function@tab Default key@tab Description
 @item
-@samp{<accept>}@tab MUTT_ENTER_S@tab accept the chain constructed
+@samp{<accept>}@tab <Enter>@tab accept the chain constructed
+@item
+@samp{<accept>}@tab <Keypadenter>@tab accept the chain constructed
+@item
+@samp{<accept>}@tab <Return>@tab accept the chain constructed
 @item
 @samp{<append>}@tab a@tab append a remailer to the chain
 @item
-@samp{<insert>}@tab i@tab insert a remailer into the chain
+@samp{<chain-next>}@tab <Right>@tab select the next element of the chain
 @item
-@samp{<delete>}@tab d@tab delete a remailer from the chain
+@samp{<chain-next>}@tab l@tab select the next element of the chain
 @item
 @samp{<chain-prev>}@tab <Left>@tab select the previous element of the chain
 @item
-@samp{<chain-next>}@tab <Right>@tab select the next element of the chain
+@samp{<chain-prev>}@tab h@tab select the previous element of the chain
+@item
+@samp{<delete>}@tab d@tab delete a remailer from the chain
+@item
+@samp{<insert>}@tab i@tab insert a remailer into the chain
+@item
+@samp{<select-entry>}@tab <Space>@tab select the current entry
 @end multitable
 
 @node Editor Menu, Autocrypt Account Menu, Mixmaster Menu, Functions <1>
@@ -17920,27 +18595,51 @@ Function@tab Default key@tab Description
 @item
 Function@tab Default key@tab Description
 @item
-@samp{<bol>}@tab ^A@tab jump to the beginning of the line
+@samp{<backspace>}@tab <Backspace>@tab delete the char in front of the cursor
+@item
+@samp{<backspace>}@tab <Delete>@tab delete the char in front of the cursor
+@item
+@samp{<backward-char>}@tab <Left>@tab move the cursor one character to the left
 @item
 @samp{<backward-char>}@tab ^B@tab move the cursor one character to the left
 @item
 @samp{<backward-word>}@tab Esc b@tab move the cursor to the beginning of the word
 @item
+@samp{<bol>}@tab <Home>@tab jump to the beginning of the line
+@item
+@samp{<bol>}@tab ^A@tab jump to the beginning of the line
+@item
+@samp{<buffy-cycle>}@tab <Space>@tab cycle among incoming mailboxes
+@item
 @samp{<capitalize-word>}@tab Esc c@tab capitalize the word
 @item
-@samp{<downcase-word>}@tab Esc l@tab convert the word to lower case
+@samp{<complete>}@tab <Tab>@tab complete filename or alias
 @item
-@samp{<upcase-word>}@tab Esc u@tab convert the word to upper case
+@samp{<complete-query>}@tab ^T@tab complete address with query
 @item
 @samp{<delete-char>}@tab ^D@tab delete the char under the cursor
 @item
+@samp{<downcase-word>}@tab Esc l@tab convert the word to lower case
+@item
+@samp{<eol>}@tab <End>@tab jump to the end of the line
+@item
 @samp{<eol>}@tab ^E@tab jump to the end of the line
+@item
+@samp{<forward-char>}@tab <Right>@tab move the cursor one character to the right
 @item
 @samp{<forward-char>}@tab ^F@tab move the cursor one character to the right
 @item
 @samp{<forward-word>}@tab Esc f@tab move the cursor to the end of the word
 @item
-@samp{<backspace>}@tab <Backspace>@tab delete the char in front of the cursor
+@samp{<history-down>}@tab <Down>@tab scroll down through the history list
+@item
+@samp{<history-down>}@tab ^N@tab scroll down through the history list
+@item
+@samp{<history-search>}@tab ^R@tab search through the history list
+@item
+@samp{<history-up>}@tab <Up>@tab scroll up through the history list
+@item
+@samp{<history-up>}@tab ^P@tab scroll up through the history list
 @item
 @samp{<kill-eol>}@tab ^K@tab delete chars from cursor to end of line
 @item
@@ -17948,26 +18647,16 @@ Function@tab Default key@tab Description
 @item
 @samp{<kill-line>}@tab ^U@tab delete all chars on the line
 @item
-@samp{<quote-char>}@tab ^V@tab quote the next typed key
-@item
 @samp{<kill-word>}@tab ^W@tab delete the word in front of the cursor
 @item
-@samp{<complete>}@tab <Tab>@tab complete filename or alias
-@item
-@samp{<complete-query>}@tab ^T@tab complete address with query
-@item
-@samp{<buffy-cycle>}@tab <Space>@tab cycle among incoming mailboxes
-@item
-@samp{<history-up>}@tab ^P@tab scroll up through the history list
-@item
-@samp{<history-down>}@tab ^N@tab scroll down through the history list
-@item
-@samp{<history-search>}@tab ^R@tab search through the history list
+@samp{<quote-char>}@tab ^V@tab quote the next typed key
 @item
 @samp{<transpose-chars>}@tab @tab transpose character under cursor with previous
+@item
+@samp{<upcase-word>}@tab Esc u@tab convert the word to upper case
 @end multitable
 
-@node Autocrypt Account Menu, , Editor Menu, Functions <1>
+@node Autocrypt Account Menu, List Menu <1>, Editor Menu, Functions <1>
 @subsection Autocrypt Account Menu
 
 @noindent
@@ -17986,6 +18675,31 @@ Function@tab Default key@tab Description
 @samp{<toggle-active>}@tab a@tab toggle the current account active/inactive
 @item
 @samp{<toggle-prefer-encrypt>}@tab p@tab toggle the current account prefer-encrypt flag
+@end multitable
+
+@node List Menu <1>, , Autocrypt Account Menu, Functions <1>
+@subsection List Menu
+
+@noindent
+@anchor{Default List Menu Bindings}
+
+@strong{Default List Menu Bindings}
+
+@multitable @columnfractions 0.333333333333333 0.333333333333333 0.333333333333333
+@item
+Function@tab Default key@tab Description
+@item
+@samp{<list-archive>}@tab a@tab retrieve list archive information
+@item
+@samp{<list-help>}@tab h@tab retrieve list help
+@item
+@samp{<list-owner>}@tab o@tab contact list owner
+@item
+@samp{<list-post>}@tab p@tab post to mailing list
+@item
+@samp{<list-subscribe>}@tab s@tab subscribe to mailing list
+@item
+@samp{<list-unsubscribe>}@tab u@tab unsubscribe from mailing list
 @end multitable
 
 @node Miscellany <1>, , Reference, Top

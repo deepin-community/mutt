@@ -8,12 +8,12 @@ his/her work (see upstream bug http://bugs.mutt.org/3261)
 
 Debian bugs: #528233, updated in #572203
 ---
- attach.c | 5 +++++
+ attach.c |    5 +++++
  1 file changed, 5 insertions(+)
 
 --- a/attach.c
 +++ b/attach.c
-@@ -387,6 +387,7 @@
+@@ -389,6 +389,7 @@ int mutt_view_attachment (FILE *fp, BODY
        }
        else
  	goto return_error;
@@ -21,7 +21,7 @@ Debian bugs: #528233, updated in #572203
      }
    }
  
-@@ -594,7 +595,11 @@
+@@ -598,7 +599,11 @@ int mutt_view_attachment (FILE *fp, BODY
  
    rfc1524_free_entry (&entry);
    if (unlink_tempfile)

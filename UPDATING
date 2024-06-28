@@ -9,6 +9,170 @@ http://www.mutt.org/relnotes/
 The keys used are:
   !: modified feature, -: deleted feature, +: new feature
 
+2.2.12 (2023-09-09):
+
+  ! Bug fix release.
+
+2.2.11 (2023-08-18):
+
+  ! Bug fix release.
+
+2.2.10 (2023-03-25):
+
+  ! Bug fix release.
+  ! $message_id_format %r and %z expandos use a URL-safe Base64 encoding:
+    '-' and '_' instead of '+' and '/'.
+
+2.2.9 (2022-11-12):
+
+  ! Bug fix release.
+
+2.2.8 (2022-11-05):
+
+  ! Bug fix release.
+  ! Ncurses now uses ioctl for window size calculation.  Previously, Mutt
+    and ncurses differed on this, which could result in screen corruption
+    in some cases.
+  ! The index now handles resizes without recalculating the top line,
+    as other menus in Mutt do.  This should reduce the "jumbling around"
+    visual effect during resizes.
+  + IMAP Fcc is now supported in batch mode.
+  ! In batch mode with $fcc_before_send set, Mutt will abort sending if
+    one or more of the Fcc's fails.
+
+2.2.7 (2022-08-07):
+
+  ! Bug fix release.
+  ! $query_command output is more strictly parsed, with one tab expected
+    between fields.  This allows the name field to be empty.
+  ! $pager may contain a %s to specify the argument placement.
+
+2.2.6 (2022-06-05):
+
+  ! Bug fix release.
+
+2.2.5 (2022-05-16):
+
+  ! Bug fix release.
+
+2.2.4 (2022-04-30):
+
+  ! Path variables (DT_PATH) are normalized to remove a trailing '/'.
+  ! If $header_cache is used as a directory, the directory must already exist or
+    else it will be interpreted as a file.
+
+2.2.3 (2022-04-12):
+
+  ! Bug fix release.
+
+2.2.2 (2022-03-25):
+
+  ! Bug fix release.
+
+2.2.1 (2022-02-19):
+
+  ! Bug fix release.
+
+2.2.0 (2021-02-12):
+
+  + $pager_skip_quoted_context determines the number of lines to show
+    before unquoted text when using <skip-quoted> in the pager.
+  ! Quadoption prompts and a few boolean prompts now have a '?' choice,
+    which will display the associated configuration variable.
+  ! <enter>, <return>, and <keypadenter> can be bound to separate
+    functions/macros.
+  + $sort_thread_groups can be used to sort top-level thread groups differently
+    than subthreads.
+  ! contrib/smime.rc now uses the cms utility for SMIME encryption/decryption.
+  + $compose_confirm_detach_first helps prevent accidentally deleting your
+    typed message in the compose menu.
+  + The $attach_save_charset_convert quadoption prompts to allow charset
+    conversion of received text-type attachments when saving them to disk.
+  + --with-gsasl allows configuration with the GNU SASL library, as an
+    alternative to Cyrus.
+  ! $reply_regexp is now localizable by translators, to add other
+    non-standard prefixes used in the locale.  "aw" was removed from the
+    default value.
+  ! $rfc2047_parameters is enabled by default.
+
+2.1.5 (2021-12-30):
+
+  ! Bug fix release.
+
+2.1.4 (2021-12-11):
+
+  ! Bug fix release.
+
+2.1.3 (2021-09-10):
+
+  ! Bug fix release.
+
+2.1.2 (2021-08-24):
+
+  ! Bug fix release.
+
+2.1.1 (2021-07-12):
+
+  ! Bug fix release.
+
+2.1.0 (2021-06-12):
+
+  ! The -d option allows a negative number. If negative, debug files are
+    not rotated. The debug level is the absolute value.
+  + <view-pager> in the attachment menu uses a copiousoutput mailcap
+    entry, or falls back to raw text.
+  + <view-mailcap>, <view-pager>, and <view-text> functions added to the
+    compose menu.
+  + <view-alt-pager> in the compose menu allows previewing the output
+    of the $send_multipart_alternative_filter the way <view-pager> does.
+  + <list-action>, bound to Esc-L in the index and pager menu, brings
+    up a menu of operations to perform on mailing list emails, such as
+    subscribe/unsubscribe.
+  + <skip-headers>, bound to 'H' in the pager, will skip to the first
+    blank line following the headers.
+  ! ~h patterns over IMAP and POP3 will only download the headers of the
+    message.  However with message caching enabled (via $message_cachedir)
+    the whole message will still be downloaded.
+  + $ssl_verify_host_override allows manually specifying the host name
+    to verify a server certificate against.
+  ! --enable-hcache, with no particular backend enabled, will scan in
+    the order: kyotocabinet, tokyocabinet, lmdb, qdbm, gdbm, bdb.
+  ! $allow_ansi understands 256-color ANSI escape sequences.
+  + $message_id_format can be used to specify a custom message-id
+    format.  Since it's a format string, this can also use a filter.
+    Please use this option with care, as Mutt won't check if your
+    message-id is legal.
+  ! mailboxes -nonotify will poll a mailbox for new mail, but will not
+    trigger new mail notifications (e.g. $beep_new or $new_mail_command).
+  ! $reverse_name affects tagged reply/forward/compose-to-sender
+    actions too.
+  ! ANSI sequences are filtered for inline-forwarded autoview content,
+    in addition to replies.
+  ! $forward_decrypt is now a quadoption, defaulting 'yes' for backward
+    compatibility.
+  ! Pattern functions, (e.g. search and limit) can be interrupted with
+    ctrl-c.
+  ! The default mailto_allow list now includes cc, in-reply-to, and
+    references.
+  + $sort_browser_mailboxes controls mailbox browsing, and defaults
+    "unsorted".  $sort_browser now only controls directory browsing.
+  ! $sort_browser and $sort_browser_mailboxes "unsorted" now means the
+    order added (e.g. specified in the muttrc).  Switching back to
+    "unsorted" will now resort in that order (previously it was a no-op.)
+  ! In the browser ".." is excluded from sorting and kept at the top.
+  ! Temp filenames generated for mailcap invocation now allow non-ascii
+    characters.
+  + $local_date_header, when unset, causes the date in the Date header
+    to be formatted using the GMT timezone.
+
+2.0.7 (2021-05-04):
+
+  ! Bug fix release.
+
+2.0.6 (2021-03-06):
+
+  ! Bug fix release.
+
 2.0.5 (2021-01-21):
 
   ! Bug fix release.

@@ -60,7 +60,7 @@ mutt_copy_hdr (FILE *in, FILE *out, LOFF_T off_start, LOFF_T off_end, int flags,
   int error;
 
   if (ftello (in) != off_start)
-    fseeko (in, off_start, 0);
+    fseeko (in, off_start, SEEK_SET);
 
   buf[0] = '\n';
   buf[1] = 0;
@@ -171,7 +171,7 @@ mutt_copy_hdr (FILE *in, FILE *out, LOFF_T off_start, LOFF_T off_end, int flags,
 	  headers[x] = this_one;
 	else
 	{
-	  int hlen = mutt_strlen (headers[x]);
+	  size_t hlen = mutt_strlen (headers[x]);
 
 	  safe_realloc (&headers[x], hlen + this_one_len + sizeof (char));
 	  strcat (headers[x] + hlen, this_one); /* __STRCAT_CHECKED__ */
@@ -231,14 +231,24 @@ mutt_copy_hdr (FILE *in, FILE *out, LOFF_T off_start, LOFF_T off_end, int flags,
       /* Find x -- the array entry where this header is to be saved */
       if (flags & CH_REORDER)
       {
+        int match = -1;
+        size_t match_len = 0, hdr_order_len;
+
 	for (t = HeaderOrderList, x = 0 ; (t) ; t = t->next, x++)
 	{
-	  if (!ascii_strncasecmp (buf, t->data, mutt_strlen (t->data)))
+          hdr_order_len = mutt_strlen (t->data);
+	  if (!ascii_strncasecmp (buf, t->data, hdr_order_len))
 	  {
+            if ((match == -1) || (hdr_order_len > match_len))
+            {
+              match = x;
+              match_len = hdr_order_len;
+            }
 	    dprint(2, (debugfile, "Reorder: %s matches %s\n", t->data, buf));
-	    break;
 	  }
 	}
+        if (match != -1)
+          x = match;
       }
 
       ignore = 0;
@@ -254,7 +264,7 @@ mutt_copy_hdr (FILE *in, FILE *out, LOFF_T off_start, LOFF_T off_end, int flags,
       }
       else
       {
-	int blen = mutt_strlen (buf);
+	size_t blen = mutt_strlen (buf);
 
 	safe_realloc (&this_one, this_one_len + blen + sizeof (char));
 	strcat (this_one + this_one_len, buf); /* __STRCAT_CHECKED__ */
@@ -277,7 +287,7 @@ mutt_copy_hdr (FILE *in, FILE *out, LOFF_T off_start, LOFF_T off_end, int flags,
       headers[x] = this_one;
     else
     {
-      int hlen = mutt_strlen (headers[x]);
+      size_t hlen = mutt_strlen (headers[x]);
 
       safe_realloc (&headers[x], hlen + this_one_len + sizeof (char));
       strcat (headers[x] + hlen, this_one); /* __STRCAT_CHECKED__ */
@@ -485,7 +495,7 @@ mutt_copy_header (FILE *in, HEADER *h, FILE *out, int flags, const char *prefix)
 static int count_delete_lines (FILE *fp, BODY *b, LOFF_T *length, size_t datelen)
 {
   int dellines = 0;
-  long l;
+  LOFF_T l;
   int ch;
 
   if (b->deleted)
@@ -660,6 +670,8 @@ _mutt_copy_message (FILE *fpout, FILE *fpin, HEADER *hdr, BODY *body,
       s.flags |= MUTT_CHARCONV;
     if (flags & MUTT_CM_REPLYING)
       s.flags |= MUTT_REPLYING;
+    if (flags & MUTT_CM_FORWARDING)
+      s.flags |= MUTT_FORWARDING;
 
     if (WithCrypto && flags & MUTT_CM_VERIFY)
       s.flags |= MUTT_VERIFY;
@@ -698,7 +710,7 @@ _mutt_copy_message (FILE *fpout, FILE *fpin, HEADER *hdr, BODY *body,
     mutt_write_mime_header (cur, fpout);
     fputc ('\n', fpout);
 
-    fseeko (fp, cur->offset, 0);
+    fseeko (fp, cur->offset, SEEK_SET);
     if (mutt_copy_bytes (fp, fpout, cur->length) == -1)
     {
       safe_fclose (&fp);
@@ -710,7 +722,7 @@ _mutt_copy_message (FILE *fpout, FILE *fpin, HEADER *hdr, BODY *body,
   }
   else
   {
-    fseeko (fpin, body->offset, 0);
+    fseeko (fpin, body->offset, SEEK_SET);
     if (flags & MUTT_CM_PREFIX)
     {
       int c;
@@ -756,7 +768,7 @@ mutt_copy_message (FILE *fpout, CONTEXT *src, HEADER *hdr, int flags,
   MESSAGE *msg;
   int r;
 
-  if ((msg = mx_open_message (src, hdr->msgno)) == NULL)
+  if ((msg = mx_open_message (src, hdr->msgno, 0)) == NULL)
     return -1;
   r = _mutt_copy_message (fpout, msg->fp, hdr, hdr->content, flags, chflags);
   if ((r >= 0) && (ferror (fpout) || feof (fpout)))
@@ -787,7 +799,7 @@ _mutt_append_message (CONTEXT *dest, FILE *fpin, CONTEXT *src, HEADER *hdr,
   MESSAGE *msg;
   int r;
 
-  fseeko (fpin, hdr->offset, 0);
+  fseeko (fpin, hdr->offset, SEEK_SET);
   if (fgets (buf, sizeof (buf), fpin) == NULL)
     return -1;
 
@@ -814,7 +826,7 @@ mutt_append_message (CONTEXT *dest, CONTEXT *src, HEADER *hdr, int cmflags,
   MESSAGE *msg;
   int r;
 
-  if ((msg = mx_open_message (src, hdr->msgno)) == NULL)
+  if ((msg = mx_open_message (src, hdr->msgno, 0)) == NULL)
     return -1;
   r = _mutt_append_message (dest, msg->fp, src, hdr, hdr->content, cmflags, chflags);
   mx_close_message (src, &msg);
@@ -884,6 +896,7 @@ static int copy_delete_attach (BODY *b, FILE *fpin, FILE *fpout,
 
 static void format_address_header (char **h, ADDRESS *a)
 {
+  ADDRESS *prev;
   char buf[HUGE_STRING];
   char cbuf[STRING];
   char c2buf[STRING];
@@ -910,7 +923,12 @@ static void format_address_header (char **h, ADDRESS *a)
     }
     else
     {
-      if (a->mailbox)
+      /* NOTE: this logic is slightly different from
+       * mutt_write_address_list() because the h function parameter
+       * starts off without a trailing space.  e.g. "To:".  So this
+       * function prepends a space with the *first* address.
+       */
+      if (a->mailbox && (!count || !prev->group))
       {
 	strcpy (cbuf, " ");	/* __STRCPY_CHECKED__ */
 	linelen++;
@@ -923,6 +941,8 @@ static void format_address_header (char **h, ADDRESS *a)
       buflen++;
       strcpy (c2buf, ",");	/* __STRCPY_CHECKED__ */
     }
+
+    prev = a;
 
     cbuflen = mutt_strlen (cbuf);
     c2buflen = mutt_strlen (c2buf);

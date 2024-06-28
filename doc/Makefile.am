@@ -92,7 +92,7 @@ install-data-local: makedoc-all instdoc
 	for f in $(srcdir_DOCFILES) ; do \
 		$(INSTALL) -m 644 $(srcdir)/$$f $(DESTDIR)$(docdir) ; \
 	done
-	-if [ -f manual.txt ] ; then \
+	-if [ -s manual.txt ] ; then \
 	  $(INSTALL) -m 644 manual.txt $(DESTDIR)$(docdir) ; \
 	fi
 	-for f in $(HTML_DOCFILES) ; do \
@@ -151,7 +151,7 @@ uninstall-local:
 
 check:
 manual.txt: manual.html
-	-LC_ALL=C lynx -localhost -dump -nolist -with_backspaces -display_charset=us-ascii manual.html > $@ || \
+	-LC_ALL=C lynx -localhost -dump -nolist -nonumbers -with_backspaces -display_charset=us-ascii manual.html > $@ || \
 	LC_ALL=C w3m -T text/html -I utf-8 -O utf-8 -dump < manual.html > $@ || \
 	LC_ALL=C elinks -dump -no-numbering -no-references manual.html | sed -e 's,\\001, ,g' > $@
 
@@ -238,6 +238,7 @@ muttrc.man: makedoc.pl $(top_srcdir)/init.h muttrc.man.head muttrc.man.tail
 		> muttrc.man
 
 EDIT = sed -e 's,@sysconfdir\@,$(sysconfdir),g' \
+	-e 's,@pkgdatadir\@,$(pkgdatadir),g' \
 	-e 's,@bindir\@,$(bindir),g' \
 	-e 's,@docdir\@,$(docdir),g'
 

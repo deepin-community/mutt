@@ -58,7 +58,7 @@ char *mutt_read_rfc822_line (FILE *f, char *line, size_t *linelen)
   FOREVER
   {
     if (fgets (buf, *linelen - offset, f) == NULL ||	/* end of file or */
-	(ISSPACE (*line) && !offset))			/* end of headers */
+	(is_email_wsp (*line) && !offset))		/* end of headers */
     {
       *line = 0;
       return (line);
@@ -72,7 +72,7 @@ char *mutt_read_rfc822_line (FILE *f, char *line, size_t *linelen)
     if (*buf == '\n')
     {
       /* we did get a full line. remove trailing space */
-      while (ISSPACE (*buf))
+      while (is_email_wsp (*buf))
 	*buf-- = 0;	/* we cannot come beyond line's beginning because
 			 * it begins with a non-space */
 
@@ -704,10 +704,10 @@ static BODY *_parse_multipart (FILE *fp, const char *boundary, LOFF_T end_off,
 #ifdef SUN_ATTACHMENT
   int lines;
 #endif
-  int blen, len, crlf = 0;
+  size_t blen, len, i;
+  int crlf = 0;
   char buffer[LONG_STRING];
   BODY *head = 0, *last = 0, *new = 0;
-  int i;
   int final = 0; /* did we see the ending boundary? */
 
   if (!boundary)
@@ -753,7 +753,8 @@ static BODY *_parse_multipart (FILE *fp, const char *boundary, LOFF_T end_off,
 #ifdef SUN_ATTACHMENT
         if (mutt_get_parameter ("content-lines", new->parameter))
         {
-	  mutt_atoi (mutt_get_parameter ("content-lines", new->parameter), &lines);
+	  mutt_atoi (mutt_get_parameter ("content-lines", new->parameter),
+                     &lines, 0);
 	  for ( ; lines; lines-- )
             if (ftello (fp) >= end_off || fgets (buffer, LONG_STRING, fp) == NULL)
               break;
@@ -941,7 +942,7 @@ time_t mutt_parse_date (const char *s, HEADER *h)
     switch (count)
     {
       case 0: /* day of the month */
-	if (mutt_atoi (t, &tm.tm_mday) < 0 || tm.tm_mday < 0)
+	if (mutt_atoi (t, &tm.tm_mday, 0) < 0 || tm.tm_mday < 0)
 	  return (-1);
 	if (tm.tm_mday > 31)
 	  return (-1);
@@ -954,7 +955,7 @@ time_t mutt_parse_date (const char *s, HEADER *h)
 	break;
 
       case 2: /* year */
-	if (mutt_atoi (t, &tm.tm_year) < 0 || tm.tm_year < 0)
+	if (mutt_atoi (t, &tm.tm_year, 0) < 0 || tm.tm_year < 0)
 	  return (-1);
         if (tm.tm_year < 50)
 	  tm.tm_year += 100;
@@ -1127,6 +1128,29 @@ success:
   return retval;
 }
 
+int mutt_parse_list_header (char **dst, char *p)
+{
+  char *beg, *end;
+
+  for (beg = strchr (p, '<'); beg; beg = strchr (end, ','))
+  {
+    if ((*beg == ',') && !(beg = strchr (beg, '<')))
+      break;
+    ++beg;
+    if (!(end = strchr (beg, '>')))
+      break;
+
+    /* Take the first mailto URL */
+    if (url_check_scheme (beg) == U_MAILTO)
+    {
+      FREE (dst);  /* __FREE_CHECKED__ */
+      *dst = mutt_substrdup (beg, end);
+      break;
+    }
+  }
+  return 1;
+}
+
 void mutt_parse_mime_message (CONTEXT *ctx, HEADER *cur)
 {
   MESSAGE *msg;
@@ -1140,7 +1164,7 @@ void mutt_parse_mime_message (CONTEXT *ctx, HEADER *cur)
     if (cur->content->parts)
       break; /* The message was parsed earlier. */
 
-    if ((msg = mx_open_message (ctx, cur->msgno)))
+    if ((msg = mx_open_message (ctx, cur->msgno, 0)))
     {
       mutt_parse_part (msg->fp, cur->content);
 
@@ -1259,7 +1283,7 @@ int mutt_parse_rfc822_line (ENVELOPE *e, HEADER *hdr, char *line, char *p, short
         {
           if (hdr)
           {
-            if ((hdr->content->length = atol (p)) < 0)
+            if (mutt_atolofft (p, &hdr->content->length, 0) < 0)
               hdr->content->length = -1;
           }
           matched = 1;
@@ -1324,7 +1348,7 @@ int mutt_parse_rfc822_line (ENVELOPE *e, HEADER *hdr, char *line, char *p, short
            * HACK - mutt has, for a very short time, produced negative
            * Lines header values.  Ignore them.
            */
-          if (mutt_atoi (p, &hdr->lines) < 0 || hdr->lines < 0)
+          if (mutt_atoi (p, &hdr->lines, 0) < 0 || hdr->lines < 0)
             hdr->lines = 0;
         }
 
@@ -1332,30 +1356,9 @@ int mutt_parse_rfc822_line (ENVELOPE *e, HEADER *hdr, char *line, char *p, short
       }
       else if (!ascii_strcasecmp (line + 1, "ist-Post"))
       {
-        /* RFC 2369.  FIXME: We should ignore whitespace, but don't. */
-        if (strncmp (p, "NO", 2))
-        {
-          char *beg, *end;
-          for (beg = strchr (p, '<'); beg; beg = strchr (end, ','))
-          {
-            if ((*beg == ',') && !(beg = strchr (beg, '<')))
-              break;
-            ++beg;
-            if (!(end = strchr (beg, '>')))
-              break;
-
-            /* Take the first mailto URL */
-            if (url_check_scheme (beg) == U_MAILTO)
-            {
-              FREE (&e->list_post);
-              e->list_post = mutt_substrdup (beg, end);
-              if (option (OPTAUTOSUBSCRIBE))
-                mutt_auto_subscribe (e->list_post);
-              break;
-            }
-          }
-        }
-        matched = 1;
+        matched = mutt_parse_list_header (&e->list_post, p);
+        if (matched && option (OPTAUTOSUBSCRIBE))
+          mutt_auto_subscribe (e->list_post);
       }
       break;
 
@@ -1609,7 +1612,7 @@ ENVELOPE *mutt_read_rfc822_header (FILE *f, HEADER *hdr, short user_hdrs,
 	continue;
       }
 
-      fseeko (f, loc, 0);
+      fseeko (f, loc, SEEK_SET);
       break; /* end of header */
     }
 
@@ -1911,4 +1914,33 @@ int mutt_count_body_parts (CONTEXT *ctx, HEADER *hdr)
     mutt_free_body (&hdr->content->parts);
 
   return hdr->attach_total;
+}
+
+void mutt_filter_commandline_header_tag (char *header)
+{
+  if (!header)
+    return;
+
+  while (*header)
+  {
+    if (*header < 33 || *header > 126 || *header == ':')
+      *header = '?';
+    header++;
+  }
+}
+
+/* It might be preferable to use mutt_filter_unprintable() instead.
+ * This filter is being lax, but preventing a header injection via
+ * an embedded newline. */
+void mutt_filter_commandline_header_value (char *header)
+{
+  if (!header)
+    return;
+
+  while (*header)
+  {
+    if (*header == '\n' || *header == '\r')
+      *header = ' ';
+    header++;
+  }
 }

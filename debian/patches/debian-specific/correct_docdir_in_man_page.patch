@@ -5,12 +5,12 @@ Subject: correct_docdir_in_man_page
 Fix the link so it points to the correct docdir
 and gzipped manual.
 ---
- doc/mutt.man | 2 +-
+ doc/mutt.man |    2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 --- a/doc/mutt.man
 +++ b/doc/mutt.man
-@@ -278,7 +278,7 @@
+@@ -285,7 +285,7 @@ System mapping between MIME types and fi
  .I @bindir@/mutt_dotlock
  The privileged dotlocking program.
  .TP

@@ -1,6 +1,10 @@
 This patch enables gpgme by default on the Debian version of mutt starting from
 1.7.0-2. More explanations are in NEWS.Debian.
 
+---
+ contrib/gpg.rc |   26 ++++++++++++++++++--------
+ 1 file changed, 18 insertions(+), 8 deletions(-)
+
 --- a/contrib/gpg.rc
 +++ b/contrib/gpg.rc
 @@ -52,30 +52,40 @@

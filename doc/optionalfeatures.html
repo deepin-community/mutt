@@ -57,7 +57,7 @@ encrypted communication using SSL or TLS.
 Since all protocols supported by Mutt support/require authentication,
 login credentials may be specified in the URL. This has the advantage
 that multiple IMAP, POP3 or SMTP servers may be specified (which isn't
-possible using, for example, <a class="link" href="reference.html#imap-user" title="3.151. imap_user">$imap_user</a>). The username may contain the
+possible using, for example, <a class="link" href="reference.html#imap-user" title="3.153. imap_user">$imap_user</a>). The username may contain the
 <span class="quote">“<span class="quote">@</span>”</span> symbol being used by many mail systems as part of the
 login name. The special characters <span class="quote">“<span class="quote">/</span>”</span>
 (<code class="literal">%2F</code>), <span class="quote">“<span class="quote">:</span>”</span> (<code class="literal">%3A</code>) and
@@ -92,29 +92,29 @@ communication</span>”</span>.
     connection after the initial unencrypted connection and exchange.
   </p><p>
     Two configuration variables control Mutt's behavior with
-    <code class="literal">STARTTLS</code>.  <a class="link" href="reference.html#ssl-starttls" title="3.363. ssl_starttls">$ssl_starttls</a> will initiate
+    <code class="literal">STARTTLS</code>.  <a class="link" href="reference.html#ssl-starttls" title="3.370. ssl_starttls">$ssl_starttls</a> will initiate
     <code class="literal">STARTTLS</code> if the server advertises support for
-    it.  <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a> will
+    it.  <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a> will
     always try to initiate it, whether the server advertises support
     or not.
   </p><p>
-    Mutt <span class="emphasis"><em>highly recommends</em></span> setting <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a> unless you need to
+    Mutt <span class="emphasis"><em>highly recommends</em></span> setting <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a> unless you need to
     connect to an unencrypted server.  It's possible for an attacker
     to spoof interactions during the initial connection and hide
     support for <code class="literal">STARTTLS</code>.  The only way to prevent
     these attacks is by forcing <code class="literal">STARTTLS</code> with the
-    <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a> configuration
+    <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a> configuration
     variable.
   </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="secure-tunnel"></a>2.2. Tunnel</h3></div></div></div><p>
-    When connecting through a <a class="link" href="reference.html#tunnel" title="3.392. tunnel">$tunnel</a>
-    and <a class="link" href="reference.html#tunnel-is-secure" title="3.393. tunnel_is_secure">$tunnel_is_secure</a> is
+    When connecting through a <a class="link" href="reference.html#tunnel" title="3.400. tunnel">$tunnel</a>
+    and <a class="link" href="reference.html#tunnel-is-secure" title="3.401. tunnel_is_secure">$tunnel_is_secure</a> is
     set (the default), Mutt will assume the connection to the server
-    through the pipe is already secured.  Mutt will ignore <a class="link" href="reference.html#ssl-starttls" title="3.363. ssl_starttls">$ssl_starttls</a> and <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a>, behaving as if TLS
+    through the pipe is already secured.  Mutt will ignore <a class="link" href="reference.html#ssl-starttls" title="3.370. ssl_starttls">$ssl_starttls</a> and <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a>, behaving as if TLS
     has already been negotiated.
   </p><p>
-    When <a class="link" href="reference.html#tunnel-is-secure" title="3.393. tunnel_is_secure">$tunnel_is_secure</a> is
-    unset, Mutt will respect the values of <a class="link" href="reference.html#ssl-starttls" title="3.363. ssl_starttls">$ssl_starttls</a> and <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a>.  It is
-    <span class="emphasis"><em>highly recommended</em></span> to set <a class="link" href="reference.html#ssl-force-tls" title="3.361. ssl_force_tls">$ssl_force_tls</a> in this case, to
+    When <a class="link" href="reference.html#tunnel-is-secure" title="3.401. tunnel_is_secure">$tunnel_is_secure</a> is
+    unset, Mutt will respect the values of <a class="link" href="reference.html#ssl-starttls" title="3.370. ssl_starttls">$ssl_starttls</a> and <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a>.  It is
+    <span class="emphasis"><em>highly recommended</em></span> to set <a class="link" href="reference.html#ssl-force-tls" title="3.368. ssl_force_tls">$ssl_force_tls</a> in this case, to
     force <code class="literal">STARTTLS</code> negotiation.  Note that doing so
     will prevent connection to an IMAP server configured for
     preauthentication (<code class="literal">PREAUTH</code>).  If you use this
@@ -132,7 +132,7 @@ Remote POP3 servers can be accessed using URLs with the
 </p><p>
 Polling for new mail is more expensive over POP3 than locally. For this
 reason the frequency at which Mutt will check for mail remotely can be
-controlled by the <a class="link" href="reference.html#pop-checkinterval" title="3.244. pop_checkinterval">$pop_checkinterval</a> variable, which
+controlled by the <a class="link" href="reference.html#pop-checkinterval" title="3.249. pop_checkinterval">$pop_checkinterval</a> variable, which
 defaults to every 60 seconds.
 </p><p>
 POP is read-only which doesn't allow for some features like editing
@@ -144,8 +144,8 @@ the POP server (either by Mutt or other tools).
 </p><a id="fetch-mail"></a><p>
 Another way to access your POP3 mail is the
 <code class="literal">&lt;fetch-mail&gt;</code> function (default: G).  It allows
-to connect to <a class="link" href="reference.html#pop-host" title="3.246. pop_host">$pop_host</a>, fetch all your
-new mail and place it in the local <a class="link" href="reference.html#spoolfile" title="3.358. spoolfile">$spoolfile</a>.  After this point, Mutt runs
+to connect to <a class="link" href="reference.html#pop-host" title="3.251. pop_host">$pop_host</a>, fetch all your
+new mail and place it in the local <a class="link" href="reference.html#spoolfile" title="3.365. spoolfile">$spoolfile</a>.  After this point, Mutt runs
 exactly as if the mail had always been local.
 </p><div class="note"><h3 class="title">Note</h3><p>
 If you only need to fetch all messages to a local mailbox you should
@@ -170,10 +170,10 @@ by the server and convert paths accordingly.
 </p><p>
 When browsing folders on an IMAP server, you can toggle whether to look
 at only the folders you are subscribed to, or all folders with the
-<span class="emphasis"><em>toggle-subscribed</em></span> command.  See also the <a class="link" href="reference.html#imap-list-subscribed" title="3.141. imap_list_subscribed">$imap_list_subscribed</a> variable.
+<span class="emphasis"><em>toggle-subscribed</em></span> command.  See also the <a class="link" href="reference.html#imap-list-subscribed" title="3.143. imap_list_subscribed">$imap_list_subscribed</a> variable.
 </p><p>
 Polling for new mail on an IMAP server can cause noticeable delays. So,
-you'll want to carefully tune the <a class="link" href="reference.html#mail-check" title="3.160. mail_check">$mail_check</a> and <a class="link" href="reference.html#timeout" title="3.385. timeout">$timeout</a> variables. Reasonable values are:
+you'll want to carefully tune the <a class="link" href="reference.html#mail-check" title="3.163. mail_check">$mail_check</a> and <a class="link" href="reference.html#timeout" title="3.393. timeout">$timeout</a> variables. Reasonable values are:
 </p><pre class="screen">
 set mail_check=90
 set timeout=15
@@ -233,16 +233,16 @@ LOGIN.
 </p><p>
 There are a few variables which control authentication:
 </p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
-<a class="link" href="reference.html#imap-user" title="3.151. imap_user">$imap_user</a> - controls the username
+<a class="link" href="reference.html#imap-user" title="3.153. imap_user">$imap_user</a> - controls the username
 under which you request authentication on the IMAP server, for all
 authenticators. This is overridden by an explicit username in the
 mailbox path (i.e. by using a mailbox name of the form
 <code class="literal">{user@host}</code>).
 </p></li><li class="listitem"><p>
-<a class="link" href="reference.html#imap-pass" title="3.144. imap_pass">$imap_pass</a> - a password which you may
+<a class="link" href="reference.html#imap-pass" title="3.146. imap_pass">$imap_pass</a> - a password which you may
 preset, used by all authentication methods where a password is needed.
 </p></li><li class="listitem"><p>
-<a class="link" href="reference.html#imap-authenticators" title="3.132. imap_authenticators">$imap_authenticators</a> - a
+<a class="link" href="reference.html#imap-authenticators" title="3.134. imap_authenticators">$imap_authenticators</a> - a
 colon-delimited list of IMAP authentication methods to try, in the order
 you wish to try them. If specified, this overrides Mutt's default
 (attempt everything, in the order listed above).
@@ -251,16 +251,16 @@ Besides supporting traditional mail delivery through a
 sendmail-compatible program, Mutt supports delivery through SMTP if it
 was configured and built with <code class="literal">--enable-smtp</code>.
 </p><p>
-If the configuration variable <a class="link" href="reference.html#smtp-url" title="3.351. smtp_url">$smtp_url</a>
+If the configuration variable <a class="link" href="reference.html#smtp-url" title="3.356. smtp_url">$smtp_url</a>
 is set, Mutt will contact the given SMTP server to deliver messages; if
-it is unset, Mutt will use the program specified by <a class="link" href="reference.html#sendmail" title="3.298. sendmail">$sendmail</a>.
+it is unset, Mutt will use the program specified by <a class="link" href="reference.html#sendmail" title="3.303. sendmail">$sendmail</a>.
 </p><p>
 For details on the URL syntax, please see <a class="xref" href="optionalfeatures.html#url-syntax" title="1.2. URL Syntax">Section 1.2, “URL Syntax”</a>.
 </p><p>
 The built-in SMTP support supports encryption (the
 <code class="literal">smtps</code> protocol using SSL or TLS) as well as SMTP
 authentication using SASL. The authentication mechanisms for SASL are
-specified in <a class="link" href="reference.html#smtp-authenticators" title="3.348. smtp_authenticators">$smtp_authenticators</a> defaulting to
+specified in <a class="link" href="reference.html#smtp-authenticators" title="3.353. smtp_authenticators">$smtp_authenticators</a> defaulting to
 an empty list which makes Mutt try all available methods from
 most-secure to least-secure.
 </p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="oauth"></a>6. OAUTHBEARER Support</h2></div></div></div><p>
@@ -288,14 +288,14 @@ An alternative script is <a class="ulink" href="https://gitlab.com/muttmua/mutt/
 </p><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="xoauth2"></a>6.1. XOAUTH2 Support</h3></div></div></div><p>
     Support for the deprecated XOAUTH2 protocol is also available.  To
     enable this, add <span class="quote">“<span class="quote">xoauth2</span>”</span> to the
-    <a class="link" href="reference.html#imap-authenticators" title="3.132. imap_authenticators">$imap_authenticators</a>,
-    <a class="link" href="reference.html#pop-authenticators" title="3.243. pop_authenticators">$pop_authenticators</a>, or
-    <a class="link" href="reference.html#smtp-authenticators" title="3.348. smtp_authenticators">$smtp_authenticators</a> config
+    <a class="link" href="reference.html#imap-authenticators" title="3.134. imap_authenticators">$imap_authenticators</a>,
+    <a class="link" href="reference.html#pop-authenticators" title="3.248. pop_authenticators">$pop_authenticators</a>, or
+    <a class="link" href="reference.html#smtp-authenticators" title="3.353. smtp_authenticators">$smtp_authenticators</a> config
     variables.  XOAUTH2 uses the same refresh command configuration variables
     as OAUTHBEARER:
-    <a class="link" href="reference.html#imap-oauth-refresh-command" title="3.143. imap_oauth_refresh_command">$imap_oauth_refresh_command</a>,
-    <a class="link" href="reference.html#pop-oauth-refresh-command" title="3.248. pop_oauth_refresh_command">$pop_oauth_refresh_command</a>, and
-    <a class="link" href="reference.html#smtp-oauth-refresh-command" title="3.349. smtp_oauth_refresh_command">$smtp_oauth_refresh_command</a>.
+    <a class="link" href="reference.html#imap-oauth-refresh-command" title="3.145. imap_oauth_refresh_command">$imap_oauth_refresh_command</a>,
+    <a class="link" href="reference.html#pop-oauth-refresh-command" title="3.253. pop_oauth_refresh_command">$pop_oauth_refresh_command</a>, and
+    <a class="link" href="reference.html#smtp-oauth-refresh-command" title="3.354. smtp_oauth_refresh_command">$smtp_oauth_refresh_command</a>.
     Those will need to be set to a script to generate the appropriate XOAUTH2
     token.
   </p></div></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="account-hook"></a>7. Managing Multiple Accounts</h2></div></div></div><p>
@@ -325,7 +325,7 @@ account-hook imap://host1/ 'set imap_user=me1 imap_pass=foo'
 account-hook imap://host2/ 'set tunnel="ssh host2 /usr/libexec/imapd"'
 account-hook smtp://user@host3/ 'set tunnel="ssh host3 /usr/libexec/smtpd"'
 </pre><p>
-To manage multiple accounts with, for example, different values of <a class="link" href="reference.html#record" title="3.272. record">$record</a> or sender addresses, <a class="link" href="configuration.html#folder-hook" title="9. Setting Variables Based Upon Mailbox"><span class="command"><strong>folder-hook</strong></span></a> has to be
+To manage multiple accounts with, for example, different values of <a class="link" href="reference.html#record" title="3.277. record">$record</a> or sender addresses, <a class="link" href="configuration.html#folder-hook" title="9. Setting Variables Based Upon Mailbox"><span class="command"><strong>folder-hook</strong></span></a> has to be
 used together with the <a class="link" href="configuration.html#mailboxes" title="16. Monitoring Incoming Mail"><span class="command"><strong>mailboxes</strong></span></a> command.
 </p><div class="example"><a id="ex-multiaccount"></a><p class="title"><strong>Example 6.2. Managing multiple accounts</strong></p><div class="example-contents"><pre class="screen">
 mailboxes imap://user@host1/INBOX
@@ -337,14 +337,14 @@ folder-hook imap://user@host2/ 'set folder=imap://host2/ ; set record=+INBOX/Sen
 In example <a class="xref" href="optionalfeatures.html#ex-multiaccount" title="Example 6.2. Managing multiple accounts">Example 6.2, “Managing multiple accounts”</a> the folders are defined
 using <a class="link" href="configuration.html#mailboxes" title="16. Monitoring Incoming Mail"><span class="command"><strong>mailboxes</strong></span></a> so
 Mutt polls them for new mail. Each <a class="link" href="configuration.html#folder-hook" title="9. Setting Variables Based Upon Mailbox"><span class="command"><strong>folder-hook</strong></span></a> triggers
-when one mailbox below each IMAP account is opened and sets <a class="link" href="reference.html#folder" title="3.95. folder">$folder</a> to the account's root folder. Next, it
-sets <a class="link" href="reference.html#record" title="3.272. record">$record</a> to the
-<span class="emphasis"><em>INBOX/Sent</em></span> folder below the newly set <a class="link" href="reference.html#folder" title="3.95. folder">$folder</a>. Please notice that the value the
+when one mailbox below each IMAP account is opened and sets <a class="link" href="reference.html#folder" title="3.97. folder">$folder</a> to the account's root folder. Next, it
+sets <a class="link" href="reference.html#record" title="3.277. record">$record</a> to the
+<span class="emphasis"><em>INBOX/Sent</em></span> folder below the newly set <a class="link" href="reference.html#folder" title="3.97. folder">$folder</a>. Please notice that the value the
 <span class="quote">“<span class="quote">+</span>”</span> <a class="link" href="advancedusage.html#shortcuts" title="10. Mailbox Shortcuts">mailbox shortcut</a>
-refers to depends on the <span class="emphasis"><em>current</em></span> value of <a class="link" href="reference.html#folder" title="3.95. folder">$folder</a> and therefore has to be set separately
-per account. Setting other values like <a class="link" href="reference.html#from" title="3.107. from">$from</a>
-or <a class="link" href="reference.html#signature" title="3.316. signature">$signature</a> is analogous to setting
-<a class="link" href="reference.html#record" title="3.272. record">$record</a>.
+refers to depends on the <span class="emphasis"><em>current</em></span> value of <a class="link" href="reference.html#folder" title="3.97. folder">$folder</a> and therefore has to be set separately
+per account. Setting other values like <a class="link" href="reference.html#from" title="3.109. from">$from</a>
+or <a class="link" href="reference.html#signature" title="3.321. signature">$signature</a> is analogous to setting
+<a class="link" href="reference.html#record" title="3.277. record">$record</a>.
 </p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="caching"></a>8. Local Caching</h2></div></div></div><p>
 Mutt contains two types of local caching: <span class="emphasis"><em>(1)</em></span> the
 so-called <span class="quote">“<span class="quote">header caching</span>”</span> and <span class="emphasis"><em>(2)</em></span> the
@@ -368,11 +368,12 @@ Header caching can be enabled via the configure script and the
 default because external database libraries are required: one of
 tokyocabinet, kyotocabinet, lmdb, qdbm, gdbm or bdb must be present.
 </p><p>
-If enabled, <a class="link" href="reference.html#header-cache" title="3.111. header_cache">$header_cache</a> can be
+If enabled, <a class="link" href="reference.html#header-cache" title="3.113. header_cache">$header_cache</a> can be
 used to either point to a file or a directory. If set to point to a
 file, one database file for all folders will be used (which may result
 in lower performance), but one file per folder if it points to a
-directory.
+directory.  When pointing to a directory, be sure to create the directory
+in advance, or Mutt will interpret it as a file to be created.
 </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="body-caching"></a>8.2. Body Caching</h3></div></div></div><p>
 Both cache methods can be combined using the same directory for storage
 (and for IMAP/POP even provide meaningful file names) which simplifies
@@ -382,11 +383,11 @@ In addition to caching message headers only, Mutt can also cache whole
 message bodies. This results in faster display of messages for POP and
 IMAP folders because messages usually have to be downloaded only once.
 </p><p>
-For configuration, the variable <a class="link" href="reference.html#message-cachedir" title="3.179. message_cachedir">$message_cachedir</a> must point to a directory. There, Mutt will
+For configuration, the variable <a class="link" href="reference.html#message-cachedir" title="3.182. message_cachedir">$message_cachedir</a> must point to a directory. There, Mutt will
 create a hierarchy of subdirectories named like the account and mailbox
 path the cache is for.
 </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="cache-dirs"></a>8.3. Cache Directories</h3></div></div></div><p>
-For using both, header and body caching, <a class="link" href="reference.html#header-cache" title="3.111. header_cache">$header_cache</a> and <a class="link" href="reference.html#message-cachedir" title="3.179. message_cachedir">$message_cachedir</a> can be safely set
+For using both, header and body caching, <a class="link" href="reference.html#header-cache" title="3.113. header_cache">$header_cache</a> and <a class="link" href="reference.html#message-cachedir" title="3.182. message_cachedir">$message_cachedir</a> can be safely set
 to the same value.
 </p><p>
 In a header or body cache directory, Mutt creates a directory hierarchy
@@ -407,7 +408,7 @@ big. It depends on the database library used for header caching whether
 disk space freed by removing messages is re-used.
 </p><p>
 For body caches, Mutt can keep the local cache in sync with the remote
-mailbox if the <a class="link" href="reference.html#message-cache-clean" title="3.178. message_cache_clean">$message_cache_clean</a> variable is
+mailbox if the <a class="link" href="reference.html#message-cache-clean" title="3.181. message_cache_clean">$message_cache_clean</a> variable is
 set. Cleaning means to remove messages from the cache which are no
 longer present in the mailbox which only happens when other mail clients
 or instances of Mutt using a different body cache location delete
@@ -456,7 +457,7 @@ changes, leave the menu, or <code class="literal">&lt;accept&gt;</code> them
 pressing (by default) the <code class="literal">Return</code> key.
 </p><p>
 Note that different remailers do have different capabilities, indicated
-in the %c entry of the remailer menu lines (see <a class="link" href="reference.html#mix-entry-format" title="3.192. mix_entry_format">$mix_entry_format</a>).  Most important is
+in the %c entry of the remailer menu lines (see <a class="link" href="reference.html#mix-entry-format" title="3.196. mix_entry_format">$mix_entry_format</a>).  Most important is
 the <span class="quote">“<span class="quote">middleman</span>”</span> capability, indicated by a capital
 <span class="quote">“<span class="quote">M</span>”</span>: This means that the remailer in question cannot be
 used as the final element of a chain, but will only forward messages to
@@ -479,7 +480,7 @@ please have a look at the mixmaster documentation.
 	<em class="replaceable"><code>mailbox</code></em>
       ... }</p></div><p>
       This command specifies mailboxes that will always be displayed
-      in the sidebar, even if <a class="link" href="reference.html#sidebar-new-mail-only" title="3.306. sidebar_new_mail_only">$sidebar_new_mail_only</a>
+      in the sidebar, even if <a class="link" href="reference.html#sidebar-new-mail-only" title="3.311. sidebar_new_mail_only">$sidebar_new_mail_only</a>
       is set and the mailbox does not contain new mail.
     </p><p>
       The <span class="quote">“<span class="quote">unsidebar_whitelist</span>”</span> command is used to remove a mailbox from
@@ -572,12 +573,12 @@ please have a look at the mixmaster documentation.
               variable</p></li><li class="listitem"><p>Mutt uses the command <code class="literal">gzip -c</code>
               to append to an existing compressed file</p></li></ul></div></div></div><br class="example-break" /></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="compress-empty"></a>12.2.4. Empty Files</h4></div></div></div><p>
         Mutt assumes that an empty file is not compressed.  In this
-        situation, unset <a class="link" href="reference.html#save-empty" title="3.287. save_empty">$save_empty</a>, so
+        situation, unset <a class="link" href="reference.html#save-empty" title="3.292. save_empty">$save_empty</a>, so
         that the compressed file will be removed if you delete all of the
         messages.
       </p></div><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="compress-security"></a>12.2.5. Security</h4></div></div></div><p>
         Encrypted files are decrypted into temporary files which are
-        stored in the <a class="link" href="reference.html#tmpdir" title="3.386. tmpdir">$tmpdir</a> directory.
+        stored in the <a class="link" href="reference.html#tmpdir" title="3.394. tmpdir">$tmpdir</a> directory.
         This could be a security risk.
       </p></div></div></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="autocryptdoc"></a>13. Autocrypt</h2></div></div></div><p>
     Mutt can be compiled with Autocrypt support by running
@@ -609,23 +610,23 @@ please have a look at the mixmaster documentation.
       deal with international domain names.
     </p><p>
       While Mutt uses GPGME for Autocrypt, normal keyring operations
-      can still be performed via classic mode (i.e. with <a class="link" href="reference.html#crypt-use-gpgme" title="3.69. crypt_use_gpgme">$crypt_use_gpgme</a> unset).
+      can still be performed via classic mode (i.e. with <a class="link" href="reference.html#crypt-use-gpgme" title="3.71. crypt_use_gpgme">$crypt_use_gpgme</a> unset).
       However, to avoid unnecessary prompts, it is recommended gpg not
       be configured in <code class="literal">loopback pinentry</code> mode, and
-      that <a class="link" href="reference.html#pgp-use-gpg-agent" title="3.235. pgp_use_gpg_agent">$pgp_use_gpg_agent</a>
+      that <a class="link" href="reference.html#pgp-use-gpg-agent" title="3.240. pgp_use_gpg_agent">$pgp_use_gpg_agent</a>
       remain set (the default).
     </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="autocryptdoc-init"></a>13.2. First Run</h3></div></div></div><p>
-      To enable Autocrypt, set <a class="link" href="reference.html#autocrypt" title="3.23. autocrypt">$autocrypt</a>, and if desired change the
-      value of <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> in
+      To enable Autocrypt, set <a class="link" href="reference.html#autocrypt" title="3.24. autocrypt">$autocrypt</a>, and if desired change the
+      value of <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> in
       your muttrc.  The first time Mutt is run after that, you will be
-      prompted to create <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a>.  Mutt will then
+      prompted to create <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a>.  Mutt will then
       automatically create an sqlite3 database and GPG keyring in that
       directory.  Note since these files should be considered private,
       Mutt will create this directory with mode
       <code class="literal">700</code>.  If you create the directory manually,
       you should do the same.
     </p><p>
-      Mutt recommends keeping the <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> directory set
+      Mutt recommends keeping the <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> directory set
       differently from your GnuPG keyring directory
       (e.g. <code class="literal">~/.gnupg</code>).  Keys are automatically
       imported into the keyring from <code class="literal">Autocrypt:</code>
@@ -633,10 +634,10 @@ please have a look at the mixmaster documentation.
       Autocrypt keys are somewhat ephemeral, and the autocrypt
       database is used to track when keys change or fall out of use.
       Having these keys mixed in with your normal keyring will make it
-      more difficult to use features such as <a class="link" href="reference.html#crypt-opportunistic-encrypt" title="3.59. crypt_opportunistic_encrypt">$crypt_opportunistic_encrypt</a>
+      more difficult to use features such as <a class="link" href="reference.html#crypt-opportunistic-encrypt" title="3.61. crypt_opportunistic_encrypt">$crypt_opportunistic_encrypt</a>
       and Autocrypt at the same time.
     </p><p>
-      The <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> variable
+      The <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> variable
       is not designed to be changed while Mutt is running.  The
       database is created (if necessary) and connected to during
       startup.  Changing the variable can result in a situation where
@@ -653,7 +654,7 @@ please have a look at the mixmaster documentation.
     </p><p>
       Account creation will first ask you for an email address.  Next,
       it will ask whether you want to create a new key or select an
-      existing key.  (Note key selection takes place from the <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> keyring, which
+      existing key.  (Note key selection takes place from the <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> keyring, which
       will normally be empty during first run).  Finally, it will ask
       whether this address should prefer encryption or not.  Autocrypt
       1.1 allows automatically enabling encryption if
@@ -668,7 +669,7 @@ please have a look at the mixmaster documentation.
       Scanning during this step will temporarily disable the header
       cache while opening each mailbox.  If you wish to do this
       manually later, you can simulate the same thing by unsetting
-      <a class="link" href="reference.html#header-cache" title="3.111. header_cache">$header_cache</a> and opening a
+      <a class="link" href="reference.html#header-cache" title="3.113. header_cache">$header_cache</a> and opening a
       mailbox.
     </p><p>
       A final technical note: the first run process takes place
@@ -745,20 +746,20 @@ please have a look at the mixmaster documentation.
       <span class="emphasis"><em>Anything</em></span> that enables normal encryption or
       signing will cause autocrypt encryption to turn off.  The only
       exception is when replying to an autocrypt-encrypted email
-      (i.e. an email decrypted from the <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> keyring).  Then,
-      if <a class="link" href="reference.html#autocrypt-reply" title="3.26. autocrypt_reply">$autocrypt_reply</a> is
+      (i.e. an email decrypted from the <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> keyring).  Then,
+      if <a class="link" href="reference.html#autocrypt-reply" title="3.27. autocrypt_reply">$autocrypt_reply</a> is
       <span class="emphasis"><em>set</em></span>, autocrypt mode will be forced on,
       overriding the settings
-      <a class="link" href="reference.html#crypt-autosign" title="3.56. crypt_autosign">$crypt_autosign</a>,
-      <a class="link" href="reference.html#crypt-autoencrypt" title="3.54. crypt_autoencrypt">$crypt_autoencrypt</a>,
-      <a class="link" href="reference.html#crypt-replyencrypt" title="3.65. crypt_replyencrypt">$crypt_replyencrypt</a>,
-      <a class="link" href="reference.html#crypt-replysign" title="3.66. crypt_replysign">$crypt_replysign</a>,
-      <a class="link" href="reference.html#crypt-replysignencrypted" title="3.67. crypt_replysignencrypted">$crypt_replysignencrypted</a>, and
-      <a class="link" href="reference.html#crypt-opportunistic-encrypt" title="3.59. crypt_opportunistic_encrypt">$crypt_opportunistic_encrypt</a>.
+      <a class="link" href="reference.html#crypt-autosign" title="3.58. crypt_autosign">$crypt_autosign</a>,
+      <a class="link" href="reference.html#crypt-autoencrypt" title="3.56. crypt_autoencrypt">$crypt_autoencrypt</a>,
+      <a class="link" href="reference.html#crypt-replyencrypt" title="3.67. crypt_replyencrypt">$crypt_replyencrypt</a>,
+      <a class="link" href="reference.html#crypt-replysign" title="3.68. crypt_replysign">$crypt_replysign</a>,
+      <a class="link" href="reference.html#crypt-replysignencrypted" title="3.69. crypt_replysignencrypted">$crypt_replysignencrypted</a>, and
+      <a class="link" href="reference.html#crypt-opportunistic-encrypt" title="3.61. crypt_opportunistic_encrypt">$crypt_opportunistic_encrypt</a>.
     </p><p>
-      When postponing a message, autocrypt will respect <a class="link" href="reference.html#postpone-encrypt" title="3.255. postpone_encrypt">$postpone_encrypt</a>, but will
+      When postponing a message, autocrypt will respect <a class="link" href="reference.html#postpone-encrypt" title="3.260. postpone_encrypt">$postpone_encrypt</a>, but will
       use the autocrypt account key to encrypt the message.  Be sure
-      to set <a class="link" href="reference.html#postpone-encrypt" title="3.255. postpone_encrypt">$postpone_encrypt</a>
+      to set <a class="link" href="reference.html#postpone-encrypt" title="3.260. postpone_encrypt">$postpone_encrypt</a>
       to ensure postponed messages marked for autocrypt encryption are
       encrypted.
     </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="autocryptdoc-acctmgmt"></a>13.4. Account Management</h3></div></div></div><p>
@@ -780,7 +781,7 @@ please have a look at the mixmaster documentation.
     </p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="autocryptdoc-keyrings"></a>13.5. Alternative Key and Keyring Strategies</h3></div></div></div><p>
       Mutt by default partitions Autocrypt from normal keyring
       encryption/signing.  It does this by using a separate GPG
-      keyring (in <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a>)
+      keyring (in <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a>)
       and creating a new ECC key in that keyring for accounts.  There
       are good reasons for doing this by default.  It keeps random
       keys found inside email headers out of your normal keyring.  ECC
@@ -794,7 +795,7 @@ please have a look at the mixmaster documentation.
       Still, some users may want to use an existing key from their
       normal keyring for Autocrypt too.  There are two ways this can
       be accomplished.  The <span class="emphasis"><em>recommended</em></span> way is to
-      set <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> to your
+      set <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> to your
       normal keyring directory (e.g. <code class="literal">~/.gnupg</code>).
       During account creation, choosing <span class="quote">“<span class="quote">(s)elect existing GPG
       key</span>”</span> will then list and allow selecting your existing key
@@ -810,7 +811,7 @@ please have a look at the mixmaster documentation.
      in signatures when decrypting.
     </p><p>
       For that reason, if you want to use an existing key from your
-      normal keyring, it is recommended to just set <a class="link" href="reference.html#autocrypt-dir" title="3.25. autocrypt_dir">$autocrypt_dir</a> to
+      normal keyring, it is recommended to just set <a class="link" href="reference.html#autocrypt-dir" title="3.26. autocrypt_dir">$autocrypt_dir</a> to
       <code class="literal">~/.gnupg</code>.  This allows <span class="quote">“<span class="quote">web of
       trust</span>”</span> to show an appropriate signature message for
       verified messages.  Autocrypt header keys will be imported into
@@ -823,7 +824,7 @@ please have a look at the mixmaster documentation.
           Replying to an Autocrypt decrypted message by default forces
           Autocrypt mode on.  By sharing the same key, all replies
           will then start in Autocrypt mode, even if a message wasn't
-          sent by one of your Autocrypt peers.  <a class="link" href="reference.html#autocrypt-reply" title="3.26. autocrypt_reply">$autocrypt_reply</a> can be
+          sent by one of your Autocrypt peers.  <a class="link" href="reference.html#autocrypt-reply" title="3.27. autocrypt_reply">$autocrypt_reply</a> can be
           <span class="emphasis"><em>unset</em></span> to allow manual control of the
           mode when replying.
         </p></li><li class="listitem"><p>

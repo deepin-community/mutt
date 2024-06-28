@@ -154,12 +154,12 @@ static int mh_read_token (char *t, int *first, int *last)
   if ((p = strchr (t, '-')))
   {
     *p++ = '\0';
-    if (mutt_atoi (t, first) < 0 || mutt_atoi (p, last) < 0)
+    if (mutt_atoi (t, first, 0) < 0 || mutt_atoi (p, last, 0) < 0)
       return -1;
   }
   else
   {
-    if (mutt_atoi (t, first) < 0)
+    if (mutt_atoi (t, first, 0) < 0)
       return -1;
     *last = *first;
   }
@@ -512,7 +512,7 @@ static void mh_update_sequences (CONTEXT * ctx)
     else
       p = ctx->hdrs[l]->path;
 
-    if (mutt_atoi (p, &i) < 0)
+    if (mutt_atoi (p, &i, 0) < 0)
       continue;
 
     if (!ctx->hdrs[l]->read)
@@ -644,7 +644,7 @@ static void mh_update_maildir (struct maildir *md, struct mh_sequences *mhs)
     else
       p = md->h->path;
 
-    if (mutt_atoi (p, &i) < 0)
+    if (mutt_atoi (p, &i, 0) < 0)
       continue;
     f = mhs_check (mhs, i);
 
@@ -1272,6 +1272,12 @@ static int mh_read_dir (CONTEXT * ctx, const char *subdir)
   int count;
   char msgbuf[STRING];
   progress_t progress;
+  size_t pathlen;
+
+  /* Clean up the path */
+  pathlen = mutt_strlen (ctx->path);
+  while ((pathlen > 1) && ctx->path[pathlen - 1] == '/')
+    ctx->path[--pathlen] = '\0';
 
   memset (&mhs, 0, sizeof (mhs));
   if (!ctx->quiet)
@@ -1494,12 +1500,12 @@ static int maildir_mh_open_message (CONTEXT *ctx, MESSAGE *msg, int msgno,
   return rc;
 }
 
-static int maildir_open_message (CONTEXT *ctx, MESSAGE *msg, int msgno)
+static int maildir_open_message (CONTEXT *ctx, MESSAGE *msg, int msgno, int headers)
 {
   return maildir_mh_open_message (ctx, msg, msgno, 1);
 }
 
-static int mh_open_message (CONTEXT *ctx, MESSAGE *msg, int msgno)
+static int mh_open_message (CONTEXT *ctx, MESSAGE *msg, int msgno, int headers)
 {
   return maildir_mh_open_message (ctx, msg, msgno, 0);
 }
@@ -2328,9 +2334,20 @@ static int maildir_check_mailbox (CONTEXT * ctx, int *index_hint)
         if (ctx->hdrs[i]->deleted != p->h->deleted)
         {
           ctx->hdrs[i]->deleted = p->h->deleted;
+          if (ctx->hdrs[i]->deleted)
+            ctx->deleted++;
+          else
+            ctx->deleted--;
           flags_changed = 1;
         }
-      ctx->hdrs[i]->trash = p->h->trash;
+      if (ctx->hdrs[i]->trash != p->h->trash)
+      {
+        ctx->hdrs[i]->trash = p->h->trash;
+        if (ctx->hdrs[i]->trash)
+          ctx->trashed++;
+        else
+          ctx->trashed--;
+      }
 
       /* this is a duplicate of an existing header, so remove it */
       mutt_free_header (&p->h);

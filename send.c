@@ -230,12 +230,17 @@ static int edit_envelope (ENVELOPE *en)
   char buf[HUGE_STRING];
   LIST *uh = UserHeader;
 
-  if (mutt_edit_address (&en->to, _("To: "), 1) == -1 || en->to == NULL)
+  if (mutt_edit_address (&en->to, _("To: "), 1) == -1)
     return (-1);
   if (option (OPTASKCC) && mutt_edit_address (&en->cc, _("Cc: "), 1) == -1)
     return (-1);
   if (option (OPTASKBCC) && mutt_edit_address (&en->bcc, _("Bcc: "), 1) == -1)
     return (-1);
+  if (!en->to && !en->cc && !en->bcc)
+  {
+    mutt_error _("No recipients were specified.");
+    return (-1);
+  }
 
   if (en->subject)
   {
@@ -254,7 +259,7 @@ static int edit_envelope (ENVELOPE *en)
       if (ascii_strncasecmp ("subject:", uh->data, 8) == 0)
       {
 	p = skip_email_wsp(uh->data + 8);
-	strncpy (buf, p, sizeof (buf));
+	strfcpy (buf, p, sizeof (buf));
       }
     }
   }
@@ -368,7 +373,7 @@ void mutt_forward_trailer (CONTEXT *ctx, HEADER *cur, FILE *fp)
 
 static int include_forward (CONTEXT *ctx, HEADER *cur, FILE *out)
 {
-  int chflags = CH_DECODE, cmflags = 0;
+  int chflags = CH_DECODE, cmflags = MUTT_CM_FORWARDING;
 
   mutt_parse_mime_message (ctx, cur);
   mutt_message_hook (ctx, cur, MUTT_MESSAGEHOOK);
@@ -413,7 +418,7 @@ static int inline_forward_attachments (CONTEXT *ctx, HEADER *cur,
   mutt_parse_mime_message (ctx, cur);
   mutt_message_hook (ctx, cur, MUTT_MESSAGEHOOK);
 
-  if ((msg = mx_open_message (ctx, cur->msgno)) == NULL)
+  if ((msg = mx_open_message (ctx, cur->msgno, 0)) == NULL)
     return -1;
 
   actx = safe_calloc (sizeof(ATTACH_CONTEXT), 1);
@@ -945,6 +950,11 @@ generate_body (FILE *tempfp,	/* stream for outgoing message */
       if (cur)
       {
 	tmp = mutt_make_message_attach (ctx, cur, 0);
+        if (!tmp)
+        {
+          mutt_error _("Could not include all requested messages!");
+          return -1;
+        }
 	if (last)
 	  last->next = tmp;
 	else
@@ -957,6 +967,11 @@ generate_body (FILE *tempfp,	/* stream for outgoing message */
 	  if (ctx->hdrs[ctx->v2r[i]]->tagged)
 	  {
 	    tmp = mutt_make_message_attach (ctx, ctx->hdrs[ctx->v2r[i]], 0);
+            if (!tmp)
+            {
+              mutt_error _("Could not include all requested messages!");
+              return -1;
+            }
 	    if (last)
 	    {
 	      last->next = tmp;
@@ -1052,29 +1067,24 @@ void mutt_set_followup_to (ENVELOPE *e)
   }
 }
 
-
 /* look through the recipients of the message we are replying to, and if
    we find an address that matches $alternates, we use that as the default
    from field */
-static ADDRESS *set_reverse_name (ENVELOPE *env)
+static ADDRESS *set_reverse_name (SEND_CONTEXT *sctx, CONTEXT *ctx)
 {
-  ADDRESS *tmp;
+  ADDRESS *tmp = NULL;
+  int i;
 
-  for (tmp = env->to; tmp; tmp = tmp->next)
+  if (sctx->cur)
+    tmp = mutt_find_user_in_envelope (sctx->cur->env);
+  else if (ctx && ctx->tagged)
   {
-    if (mutt_addr_is_user (tmp))
-      break;
+    for (i = 0; i < ctx->vcount; i++)
+      if (ctx->hdrs[ctx->v2r[i]]->tagged)
+        if ((tmp = mutt_find_user_in_envelope (ctx->hdrs[ctx->v2r[i]]->env)) != NULL)
+          break;
   }
-  if (!tmp)
-  {
-    for (tmp = env->cc; tmp; tmp = tmp->next)
-    {
-      if (mutt_addr_is_user (tmp))
-	break;
-    }
-  }
-  if (!tmp && mutt_addr_is_user (env->from))
-    tmp = env->from;
+
   if (tmp)
   {
     tmp = rfc822_cpy_adr_real (tmp);
@@ -1151,7 +1161,7 @@ static int generate_multipart_alternative (HEADER *msg, int flags)
     }
 
 
-  alternative = mutt_run_send_alternative_filter (msg->content);
+  alternative = mutt_run_send_alternative_filter (msg);
   if (!alternative)
     return -1;
 
@@ -1236,7 +1246,7 @@ cleanup:
   return (i);
 }
 
-static void save_fcc_mailbox_part (BUFFER *fcc_mailbox, SEND_CONTEXT *sctx,
+static int save_fcc_mailbox_part (BUFFER *fcc_mailbox, SEND_CONTEXT *sctx,
                                    int flags)
 {
   int rc, choice;
@@ -1254,35 +1264,21 @@ static void save_fcc_mailbox_part (BUFFER *fcc_mailbox, SEND_CONTEXT *sctx,
 
   if (!(mutt_buffer_len (fcc_mailbox) &&
         mutt_strcmp ("/dev/null", mutt_b2s (fcc_mailbox))))
-    return;
-
-  /* Don't save a copy when we are in batch-mode, and the FCC
-   * folder is on an IMAP server: This would involve possibly lots
-   * of user interaction, which is not available in batch mode.
-   *
-   * Note: A patch to fix the problems with the use of IMAP servers
-   * from non-curses mode is available from Brendan Cully.  However,
-   * I'd like to think a bit more about this before including it.
-   */
-#ifdef USE_IMAP
-  if ((flags & SENDBATCH) &&
-      mx_is_imap (mutt_b2s (fcc_mailbox)))
-  {
-    mutt_sleep (1);
-    mutt_error _("Warning: Fcc to an IMAP mailbox is not supported in batch mode");
-    /* L10N:
-       Printed after the "Fcc to an IMAP mailbox is not supported" message.
-       To make it clearer that the message doesn't mean Mutt is aborting
-       sending the mail too.
-       %s is the full mailbox URL, including imap(s)://
-    */
-    mutt_error (_("Skipping Fcc to %s"), mutt_b2s (fcc_mailbox));
-    return;
-  }
-#endif
+    return 0;
 
   rc = mutt_write_fcc (mutt_b2s (fcc_mailbox), sctx, NULL, 0, NULL);
-  while (rc && !(flags & SENDBATCH))
+  if (rc && (flags & SENDBATCH))
+  {
+    /* L10N:
+       Printed when a FCC in batch mode fails.  Batch mode will abort
+       if $fcc_before_send is set.
+       %s is the mailbox name.
+    */
+    mutt_error (_("Warning: Fcc to %s failed"), mutt_b2s (fcc_mailbox));
+    return rc;
+  }
+
+  while (rc)
   {
     mutt_sleep (1);
     mutt_clear_error ();
@@ -1326,7 +1322,7 @@ static void save_fcc_mailbox_part (BUFFER *fcc_mailbox, SEND_CONTEXT *sctx,
     }
   }
 
-  return;
+  return 0;
 }
 
 static int save_fcc (SEND_CONTEXT *sctx,
@@ -1428,7 +1424,7 @@ full_fcc:
     /* Split fcc into comma separated mailboxes */
     delim_size = mutt_strlen (FccDelimiter);
     if (!delim_size)
-      save_fcc_mailbox_part (sctx->fcc, sctx, flags);
+      rc = save_fcc_mailbox_part (sctx->fcc, sctx, flags);
     else
     {
       BUFFER *fcc_mailbox;
@@ -1449,7 +1445,7 @@ full_fcc:
           mutt_buffer_strcpy (fcc_mailbox, mb_beg);
 
         if (mutt_buffer_len (fcc_mailbox))
-          save_fcc_mailbox_part (fcc_mailbox, sctx, flags);
+          rc |= save_fcc_mailbox_part (fcc_mailbox, sctx, flags);
 
         mb_beg = mb_end;
       }
@@ -1732,6 +1728,7 @@ static void scope_free (SEND_SCOPE **pscope)
   FREE (&scope->maildir);
   FREE (&scope->outbox);
   FREE (&scope->postponed);
+  FREE (&scope->cur_folder);
   rfc822_free_address (&scope->env_from);
   rfc822_free_address (&scope->from);
   FREE (&scope->sendmail);
@@ -1757,6 +1754,7 @@ static SEND_SCOPE *scope_save (void)
   scope->maildir = safe_strdup (Maildir);
   scope->outbox = safe_strdup (Outbox);
   scope->postponed = safe_strdup (Postponed);
+  scope->cur_folder = safe_strdup (CurrentFolder);
 
   scope->env_from = rfc822_cpy_adr (EnvFrom, 0);
   scope->from = rfc822_cpy_adr (From, 0);
@@ -1783,6 +1781,7 @@ static void scope_restore (SEND_SCOPE *scope)
   mutt_str_replace (&Maildir, scope->maildir);
   mutt_str_replace (&Outbox, scope->outbox);
   mutt_str_replace (&Postponed, scope->postponed);
+  mutt_str_replace (&CurrentFolder, scope->cur_folder);
 
   rfc822_free_address (&EnvFrom);
   EnvFrom = rfc822_cpy_adr (scope->env_from, 0);
@@ -1853,8 +1852,7 @@ static int send_message_setup (SEND_CONTEXT *sctx, const char *tempfile,
   BUFFER *tmpbuffer;
 
   /* Prompt only for the <mail> operation. */
-  if ((sctx->flags == SENDBACKGROUNDEDIT) &&
-      !sctx->msg &&
+  if ((sctx->flags & SENDCHECKPOSTPONED) &&
       quadoption (OPT_RECALL) != MUTT_NO &&
       mutt_num_postponed (1))
   {
@@ -1956,7 +1954,9 @@ static int send_message_setup (SEND_CONTEXT *sctx, const char *tempfile,
   }
 
   /* this is handled here so that the user can match ~f in send-hook */
-  if (sctx->cur && option (OPTREVNAME) && !(sctx->flags & (SENDPOSTPONED|SENDRESEND)))
+  if (option (OPTREVNAME) && ctx &&
+      !(sctx->flags & (SENDPOSTPONED|SENDRESEND)) &&
+      (sctx->flags & (SENDREPLY | SENDFORWARD | SENDTOSENDER)))
   {
     /* we shouldn't have to worry about freeing `sctx->msg->env->from' before
      * setting it here since this code will only execute when doing some
@@ -1970,7 +1970,7 @@ static int send_message_setup (SEND_CONTEXT *sctx, const char *tempfile,
      * have their aliases expanded.
      */
 
-    sctx->msg->env->from = set_reverse_name (sctx->cur->env);
+    sctx->msg->env->from = set_reverse_name (sctx, ctx);
   }
 
   if (! (sctx->flags & (SENDPOSTPONED|SENDRESEND)) &&
@@ -2555,7 +2555,18 @@ main_loop:
   mutt_prepare_envelope (sctx->msg->env, 1);
 
   if (option (OPTFCCBEFORESEND))
-    save_fcc (sctx, clear_content, pgpkeylist, sctx->flags);
+  {
+    if (save_fcc (sctx, clear_content, pgpkeylist, sctx->flags) &&
+        (sctx->flags & SENDBATCH))
+    {
+      /* L10N:
+         In batch mode with $fcc_before_send set, Mutt will abort if any of
+         the Fcc's fails.
+      */
+      puts _("Fcc failed.  Aborting sending.");
+      goto cleanup;
+    }
+  }
 
   if ((mta_rc = invoke_mta (sctx)) < 0)
   {

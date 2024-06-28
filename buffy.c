@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1996-2000,2010,2013 Michael R. Elkins <me@mutt.org>
- * Copyright (C) 2016-2017 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2016-2017,2020-2022 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -65,7 +65,7 @@ static BUFFY* buffy_get (const char *path);
 static int fseek_last_message (FILE * f)
 {
   LOFF_T pos;
-  char buffer[BUFSIZ + 9];	/* 7 for "\n\nFrom " */
+  char buffer[BUFSIZ + 7];	/* 7 for "\n\nFrom " */
   int bytes_read;
   int i;			/* Index into `buffer' for scanning.  */
 
@@ -83,13 +83,13 @@ static int fseek_last_message (FILE * f)
   while ((pos -= bytes_read) >= 0)
   {
     /* we save in the buffer at the end the first 7 chars from the last read */
-    strncpy (buffer + BUFSIZ, buffer, 5+2); /* 2 == 2 * mutt_strlen(CRLF) */
+    memcpy (buffer + BUFSIZ, buffer, 7);
     fseeko (f, pos, SEEK_SET);
     bytes_read = fread (buffer, sizeof (char), bytes_read, f);
     if (bytes_read == -1)
       return -1;
     for (i = bytes_read; --i >= 0;)
-      if (!mutt_strncmp (buffer + i, "\n\nFrom ", mutt_strlen ("\n\nFrom ")))
+      if (!mutt_strncmp (buffer + i, "\n\nFrom ", 7))
       {				/* found it - go to the beginning of the From */
 	fseeko (f, pos + i + 2, SEEK_SET);
 	return 0;
@@ -100,7 +100,7 @@ static int fseek_last_message (FILE * f)
   /* here we are at the beginning of the file */
   if (!mutt_strncmp ("From ", buffer, 5))
   {
-    fseek (f, 0, 0);
+    fseek (f, 0, SEEK_SET);
     return (0);
   }
 
@@ -272,8 +272,9 @@ static BUFFY **find_buffy_slot (const char *path)
 /* To avoid overwriting existing values:
  * - label should be NULL if unspecified
  * - nopoll should be -1 if unspecified
+ * - nonotify should be -1 if unspecified
  */
-void mutt_buffy_add (const char *path, const char *label, int nopoll)
+void mutt_buffy_add (const char *path, const char *label, int nopoll, int nonotify)
 {
   BUFFY **tmp;
   struct stat sb;
@@ -313,6 +314,9 @@ void mutt_buffy_add (const char *path, const char *label, int nopoll)
       mutt_monitor_remove (*tmp);
 #endif
   }
+
+  if (nonotify != -1)
+      (*tmp)->nonotify = nonotify;
 
   (*tmp)->new = 0;
   (*tmp)->notified = 1;
@@ -371,7 +375,7 @@ int mutt_parse_mailboxes (BUFFER *path, BUFFER *s, union pointer_long_t udata,
 {
   BUFFER *label = NULL;
   BUFFER *mailbox = NULL;
-  int nopoll = -1, rc = -1;
+  int nonotify = -1, nopoll = -1, rc = -1;
   int label_set = 0, mailbox_set = 0;
 
   mailbox = mutt_buffer_pool_get ();
@@ -387,6 +391,10 @@ int mutt_parse_mailboxes (BUFFER *path, BUFFER *s, union pointer_long_t udata,
         nopoll = 0;
       else if (mutt_strcmp (mutt_b2s (path), "-nopoll") == 0)
         nopoll = 1;
+      else if (mutt_strcmp (mutt_b2s (path), "-notify") == 0)
+        nonotify = 0;
+      else if (mutt_strcmp (mutt_b2s (path), "-nonotify") == 0)
+        nonotify = 1;
       else if (mutt_strcmp (mutt_b2s (path), "-label") == 0)
       {
         if (!MoreArgs (s))
@@ -421,7 +429,7 @@ int mutt_parse_mailboxes (BUFFER *path, BUFFER *s, union pointer_long_t udata,
     }
     else
       mutt_buffy_add (mutt_b2s (mailbox), label_set ? mutt_b2s (label) : NULL,
-                      nopoll);
+                      nopoll, nonotify);
 
     mutt_buffer_clear (mailbox);
     mutt_buffer_clear (label);
@@ -766,8 +774,14 @@ int mutt_buffy_check (int force)
 
     if (!tmp->new)
       tmp->notified = 0;
-    else if (!tmp->notified)
-      BuffyNotify++;
+    else
+    {
+      /* pretend we've already notified for the mailbox */
+      if (tmp->nonotify)
+        tmp->notified = 1;
+      else if (!tmp->notified)
+        BuffyNotify++;
+    }
   }
 
   BuffyDoneTime = BuffyTime;

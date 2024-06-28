@@ -93,6 +93,10 @@ static int tls_starttls_close (CONNECTION* conn);
 static int tls_init (void);
 static int tls_negotiate (CONNECTION* conn);
 static int tls_check_certificate (CONNECTION* conn);
+static int tls_passwd_cb (void* userdata, int attempt, const char* token_url,
+                          const char* token_label,
+                          unsigned int flags,
+                          char* pin, size_t pin_max);
 
 
 static int tls_init (void)
@@ -245,9 +249,19 @@ int mutt_ssl_starttls (CONNECTION* conn)
 }
 
 /* Note: this function grabs the CN out of the client
- * cert but appears to do nothing with it.  It does contain a call
- * to mutt_account_getuser().
+ * cert but appears to do nothing with it.
+ *
+ * It does contain a call to mutt_account_getuser(), but this
+ * interferes with SMTP client-cert authentication that doesn't use
+ * AUTH EXTERNAL. (see gitlab #336)
+ *
+ * The mutt_sasl.c code sets up callbacks to get the login or user,
+ * and it looks like the Cyrus SASL external code calls those.
+ *
+ * Brendan doesn't recall if this really was necessary at one time, so
+ * I'm disabling it.
  */
+#if 0
 static void tls_get_client_cert (CONNECTION* conn)
 {
   tlssockdata *data = conn->sockdata;
@@ -292,6 +306,7 @@ err:
   FREE (&cn);
   gnutls_x509_crt_deinit (clientcrt);
 }
+#endif
 
 #if HAVE_GNUTLS_PRIORITY_SET_DIRECT
 static int tls_set_priority (tlssockdata *data)
@@ -403,6 +418,7 @@ static int tls_negotiate (CONNECTION * conn)
 {
   tlssockdata *data;
   int err;
+  char *hostname;
 
   data = (tlssockdata *) safe_calloc (1, sizeof (tlssockdata));
   conn->sockdata = data;
@@ -414,6 +430,8 @@ static int tls_negotiate (CONNECTION * conn)
     mutt_sleep (2);
     return -1;
   }
+  gnutls_certificate_set_pin_function (data->xcred, tls_passwd_cb,
+                                       &conn->account);
 
   gnutls_certificate_set_x509_trust_file (data->xcred, SslCertFile,
 					  GNUTLS_X509_FMT_PEM);
@@ -448,8 +466,9 @@ static int tls_negotiate (CONNECTION * conn)
   /* set socket */
   gnutls_transport_set_ptr (data->state, (gnutls_transport_ptr_t)(long)conn->fd);
 
-  if (gnutls_server_name_set (data->state, GNUTLS_NAME_DNS, conn->account.host,
-                              mutt_strlen (conn->account.host)))
+  hostname = SslVerifyHostOverride ? SslVerifyHostOverride : conn->account.host;
+  if (gnutls_server_name_set (data->state, GNUTLS_NAME_DNS, hostname,
+                              mutt_strlen (hostname)))
   {
     mutt_error _("Warning: unable to set TLS SNI host name");
     mutt_sleep (1);
@@ -494,7 +513,12 @@ static int tls_negotiate (CONNECTION * conn)
   /* NB: gnutls_cipher_get_key_size() returns key length in bytes */
   conn->ssf = gnutls_cipher_get_key_size (gnutls_cipher_get (data->state)) * 8;
 
+#if 0
+  /* See comment above the tls_get_client_cert() function for why this
+   * is ifdef'ed out.  Also note the SslClientCert is already set up
+   * above. */
   tls_get_client_cert (conn);
+#endif
 
   if (!option (OPTNOCURSES))
   {
@@ -853,6 +877,13 @@ static int tls_check_one_certificate (const gnutls_datum_t *certdata,
                           &savedcert))
     return 1;
 
+  if (option (OPTNOCURSES))
+  {
+    dprint (1, (debugfile, "tls_check_one_certificate: unable to prompt for certificate in batch mode\n"));
+    mutt_error _("Untrusted server certificate");
+    return 0;
+  }
+
   /* interactive check from user */
   if (gnutls_x509_crt_init (&cert) < 0)
   {
@@ -1170,6 +1201,9 @@ static int tls_check_certificate (CONNECTION* conn)
   int certerr, i, preauthrc, savedcert, rc = 0;
   int max_preauth_pass = -1;
   int rcsettrust;
+  char *hostname;
+
+  hostname = SslVerifyHostOverride ? SslVerifyHostOverride : conn->account.host;
 
   /* tls_verify_peers() calls gnutls_certificate_verify_peers2(),
    * which verifies the auth_type is GNUTLS_CRD_CERTIFICATE
@@ -1194,7 +1228,7 @@ static int tls_check_certificate (CONNECTION* conn)
   preauthrc = 0;
   for (i = 0; i < cert_list_size; i++)
   {
-    rc = tls_check_preauth (&cert_list[i], certstat, conn->account.host, i,
+    rc = tls_check_preauth (&cert_list[i], certstat, hostname, i,
                             &certerr, &savedcert);
     preauthrc += rc;
     if (!preauthrc)
@@ -1212,7 +1246,7 @@ static int tls_check_certificate (CONNECTION* conn)
   /* then check interactively, starting from chain root */
   for (i = cert_list_size - 1; i >= 0; i--)
   {
-    rc = tls_check_one_certificate (&cert_list[i], certstat, conn->account.host,
+    rc = tls_check_one_certificate (&cert_list[i], certstat, hostname,
                                     i, cert_list_size);
 
     /* Stop checking if the menu cert is aborted or rejected. */
@@ -1240,4 +1274,33 @@ static int tls_check_certificate (CONNECTION* conn)
   }
 
   return rc;
+}
+
+static void client_cert_prompt (char *prompt, size_t prompt_size, ACCOUNT *account)
+{
+  /* L10N:
+     When using a $ssl_client_cert, GNUTLS may prompt for the password
+     to decrypt the cert.  %s is the hostname.
+  */
+  snprintf (prompt, prompt_size, _("Password for %s client cert: "),
+            account->host);
+}
+
+static int tls_passwd_cb (void* userdata, int attempt, const char* token_url,
+                          const char* token_label,
+                          unsigned int flags,
+                          char* buf, size_t size)
+{
+  ACCOUNT *account;
+
+  if (!buf || size <= 0 || !userdata)
+    return GNUTLS_E_INVALID_PASSWORD;
+
+  account = (ACCOUNT *) userdata;
+
+  if (_mutt_account_getpass (account, client_cert_prompt))
+    return GNUTLS_E_INVALID_PASSWORD;
+
+  snprintf(buf, size, "%s", account->pass);
+  return GNUTLS_E_SUCCESS;
 }

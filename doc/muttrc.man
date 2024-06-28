@@ -360,7 +360,10 @@ The first matching \fBmbox-hook\fP applies.
 .
 .PP
 .nf
-\fBmailboxes\fP [[\fB-poll\fP | \fB-nopoll\fP] [[\fB-label\fP \fIlabel\fP] | \fB-nolabel\fP] \fIfilename\fP] [ ... ]
+\fBmailboxes\fP [[\fB-notify\fP | \fB-nonotify\fP]
+           [\fB-poll\fP | \fB-nopoll\fP]
+           [[\fB-label\fP \fIlabel\fP] | \fB-nolabel\fP]
+           \fIfilename\fP] [ ... ]
 \fBunmailboxes\fP [ \fB*\fP | \fIfilename\fP ... ]
 .fi
 .IP
@@ -1222,6 +1225,19 @@ For an explanation of \(lqsoft\-fill\(rq, see the $index_format documentation.
 
 
 .TP
+.B attach_save_charset_convert
+.nf
+Type: quadoption
+Default: ask\-yes
+.fi
+.IP
+When saving received text\-type attachments, this quadoption
+prompts to convert the character set if the encoding of the
+attachment (or $assumed_charset if none is specified) differs
+from charset.
+
+
+.TP
 .B attach_save_dir
 .nf
 Type: path
@@ -1594,6 +1610,8 @@ Example:
 set certificate_file=~/.mutt/certificates
 
 .EE
+.IP
+(OpenSSL and GnuTLS only)
 
 
 .TP
@@ -1672,6 +1690,23 @@ Default: yes
 .IP
 When \fIunset\fP, Mutt will not collapse a thread if it contains any
 unread messages.
+
+
+.TP
+.B compose_confirm_detach_first
+.nf
+Type: boolean
+Default: yes
+.fi
+.IP
+When \fIset\fP, Mutt will prompt for confirmation when trying to
+use \fB<detach\-file>\fP on the first entry in the compose menu.
+This is to help prevent irreversible loss of the typed message by
+accidentally hitting 'D' in the menu.
+.IP
+Note: Mutt only prompts for the first entry.  It doesn't keep
+track of which message is the typed message if the entries are
+reordered, or if the first entry was already deleted.
 
 
 .TP
@@ -2173,6 +2208,9 @@ Controls whether or not messages are really deleted when closing or
 synchronizing a mailbox.  If set to \fIyes\fP, messages marked for
 deleting will automatically be purged without prompting.  If set to
 \fIno\fP, messages marked for deletion will be kept in the mailbox.
+.IP
+This option is ignored for maildir\-style mailboxes when $maildir_trash
+is set.
 
 
 .TP
@@ -2358,7 +2396,7 @@ Default: \(lq\(rq
 .fi
 .IP
 The file which includes random data that is used to initialize SSL
-library functions.
+library functions. (OpenSSL only)
 
 
 .TP
@@ -2419,6 +2457,8 @@ Default: yes
 .IP
 This variable controls whether or not attachments on outgoing messages
 are saved along with the main body of your message.
+.IP
+Note: $fcc_before_send forces the default (set) behavior of this option.
 
 
 .TP
@@ -2450,7 +2490,11 @@ Default: no
 When this variable is \fIset\fP, FCCs will be stored unencrypted and
 unsigned, even when the actual message is encrypted and/or
 signed.
+.IP
+Note: $fcc_before_send forces the default (unset) behavior of this option.
 (PGP only)
+.IP
+See also $pgp_self_encrypt, $smime_self_encrypt.
 
 
 .TP
@@ -2662,15 +2706,18 @@ otherwise $mime_forward_decode is used instead.
 .TP
 .B forward_decrypt
 .nf
-Type: boolean
+Type: quadoption
 Default: yes
 .fi
 .IP
-Controls the handling of encrypted messages when forwarding a message.
-When \fIset\fP, the outer layer of encryption is stripped off.  This
-variable is only used if $mime_forward is \fIset\fP and
-$mime_forward_decode is \fIunset\fP.
-(PGP only)
+This quadoption controls the handling of encrypted messages when
+forwarding or attaching a message.  When set to or answered
+\(lqyes\(rq, the outer layer of encryption is stripped off.
+.IP
+This variable is used if $mime_forward is \fIset\fP and
+$mime_forward_decode is \fIunset\fP.  It is also used when
+attaching a message via \fB<attach\-message>\fP in the compose
+menu.  (PGP only)
 
 
 .TP
@@ -2778,7 +2825,8 @@ This variable points to the header cache database.
 If pointing to a directory Mutt will contain a header cache
 database file per folder, if pointing to a file that file will
 be a single global header cache. By default it is \fIunset\fP so no header
-caching will be used.
+caching will be used.  If pointing to a directory, it must be
+created in advance.
 .IP
 Header caching can greatly improve speed when opening POP, IMAP
 MH or Maildir folders, see \(lqcaching\(rq for details.
@@ -3646,6 +3694,18 @@ a \(lqmbox-hook\(rq command.
 
 
 .TP
+.B local_date_header
+.nf
+Type: boolean
+Default: yes
+.fi
+.IP
+If \fIset\fP, the date in the Date header of emails that you send will be in
+your local timezone. If unset a UTC date will be used instead to avoid
+leaking information about your current location.
+
+
+.TP
 .B mail_check
 .nf
 Type: number
@@ -3667,9 +3727,6 @@ When \fIset\fP, Mutt will only notify you about new mail that has been received
 since the last time you opened the mailbox.  When \fIunset\fP, Mutt will notify you
 if any new mail exists in the mailbox, regardless of whether you have visited it
 recently.
-.IP
-When \fI$mark_old\fP is set, Mutt does not consider the mailbox to contain new
-mail if only old messages exist.
 
 
 .TP
@@ -3681,10 +3738,13 @@ Default: no
 .IP
 When \fIset\fP, mutt will periodically calculate message
 statistics of a mailbox while polling for new mail.  It will
-check for unread, flagged, and total message counts.  Because
-this operation is more performance intensive, it defaults to
-\fIunset\fP, and has a separate option, $mail_check_stats_interval, to
-control how often to update these counts.
+check for unread, flagged, and total message counts.
+(Note: IMAP mailboxes only support unread and total counts).
+.IP
+Because this operation is more performance intensive, it defaults
+to \fIunset\fP, and has a separate option,
+$mail_check_stats_interval, to control how often to update these
+counts.
 .IP
 Message statistics can also be explicitly calculated by invoking the
 \fB<check\-stats>\fP
@@ -3926,6 +3986,72 @@ attachments of type \fBmessage/rfc822\fP.  For a full listing of defined
 
 
 .TP
+.B message_id_format
+.nf
+Type: string
+Default: \(lq<%z@%f>\(rq
+.fi
+.IP
+This variable describes the format of the Message\-ID generated
+when sending messages.  Mutt 2.0 introduced a more compact
+format, but this variable allows the ability to choose your own
+format.  The value may end in \(lq|\(rq to invoke an external filter.
+See formatstrings-filters.
+.IP
+Please note that the Message\-ID value follows a strict syntax,
+and you are responsible for ensuring correctness if you change
+this from the default.  In particular, the value must follow the
+syntax in RFC 5322: \(lq\fB\(rq<\(rq id\-left \(rq@\(rq id\-right \(rq>\(rq\fP\(rq.  No
+spaces are allowed, and \fBid\-left\fP should follow the
+dot\-atom\-text syntax in the RFC.  The \fBid\-right\fP should
+generally be left at %f.
+.IP
+The old Message\-ID format can be used by setting this to:
+\(lq\fB<%Y%02m%02d%02H%02M%02S.G%c%p@%f>\fP\(rq
+.IP
+The following \fBprintf(3)\fP\-style sequences are understood:
+.RS
+.PD 0
+.TP
+%c 
+step counter looping from \(lqA\(rq to \(lqZ\(rq
+.TP
+%d 
+current day of the month (GMT)
+.TP
+%f 
+$hostname
+.TP
+%H 
+current hour using a 24\-hour clock (GMT)
+.TP
+%m 
+current month number (GMT)
+.TP
+%M 
+current minute of the hour (GMT)
+.TP
+%p 
+pid of the running mutt process
+.TP
+%r 
+3 bytes of pseudorandom data encoded in Base64
+.TP
+%S 
+current second of the minute (GMT)
+.TP
+%x 
+1 byte of pseudorandom data hex encoded (example: '1b')
+.TP
+%Y 
+current year using 4 digits (GMT)
+.TP
+%z 
+4 byte timestamp + 8 bytes of pseudorandom data encoded in Base64
+.RE
+.PD 1
+
+.TP
 .B meta_key
 .nf
 Type: boolean
@@ -4101,6 +4227,9 @@ The remailer's short name.
 The remailer's e\-mail address.
 .RE
 .PD 1
+.IP
+(Mixmaster only)
+
 
 .TP
 .B mixmaster
@@ -4112,7 +4241,7 @@ Default: \(lqmixmaster\(rq
 This variable contains the path to the Mixmaster binary on your
 system.  It is used with various sets of parameters to gather the
 list of known remailers, and to finally send a message through the
-mixmaster chain.
+mixmaster chain. (Mixmaster only)
 
 
 .TP
@@ -4187,6 +4316,13 @@ messages. The value \(lqbuiltin\(rq means to use the built\-in pager, otherwise 
 variable should specify the pathname of the external pager you would
 like to use.
 .IP
+The string may contain a \(lq%s\(rq, which will be substituted with
+the generated message filename.  Mutt will add quotes around the
+string substituted for \(lq%s\(rq automatically according to shell
+quoting rules, so you should avoid adding your own.  If no \(lq%s\(rq
+is found in the string, Mutt will append the message filename to
+the end of the string.
+.IP
 Using an external pager may have some disadvantages: Additional
 keystrokes are necessary because you can't call mutt functions
 directly from the pager, and screen resizes cause lines longer than
@@ -4244,6 +4380,20 @@ will only show 5 lines of the actual index.  A value of 0 results in
 no index being shown.  If the number of messages in the current folder
 is less than $pager_index_lines, then the index will only use as
 many lines as it needs.
+
+
+.TP
+.B pager_skip_quoted_context
+.nf
+Type: number
+Default: 0
+.fi
+.IP
+Determines the number of lines of context to show before the
+unquoted text when using \fB<skip-quoted>\fP. When set to a
+positive number at most that many lines of the previous quote are
+displayed. If the previous quote is shorter the whole quote is
+displayed.
 
 
 .TP
@@ -5499,13 +5649,41 @@ Also see $wrap.
 .TP
 .B reply_regexp
 .nf
-Type: regular expression
-Default: \(lq^(re([\\[0\-9\\]+])*|aw):[ \\t]*\(rq
+Type: regular expression (localized)
+Default: \(lq^(re)(\\[[0\-9]+\\])*:[ \\t]*\(rq
 .fi
 .IP
-A regular expression used to recognize reply messages when threading
-and replying. The default value corresponds to the English \(rqRe:\(rq and
-the German \(rqAw:\(rq.
+A regular expression used to recognize reply messages when
+threading and replying. The default value corresponds to the
+standard Latin \(rqRe:\(rq prefix.
+.IP
+This value may have been localized by the translator for your
+locale, adding other prefixes that are common in the locale. You
+can add your own prefixes by appending inside \fB\(rq^(re)\(rq\fP.  For
+example: \fB\(rq^(re|se)\(rq\fP or \fB\(rq^(re|aw|se)\(rq\fP.
+.IP
+The second parenthesized expression matches zero or more
+bracketed numbers following the prefix, such as \fB\(rqRe[1]: \(rq\fP.
+The initial \fB\(rq\\\\[\(rq\fP means a literal left\-bracket character.
+Note the backslash must be doubled when used inside a double
+quoted string in the muttrc.  \fB\(rq[0\-9]+\(rq\fP means one or more
+numbers.  \fB\(rq\\\\]\(rq\fP means a literal right\-bracket.  Finally the
+whole parenthesized expression has a \fB\(rq*\(rq\fP suffix, meaning it
+can occur zero or more times.
+.IP
+The last part matches a colon followed by an optional space or
+tab.  Note \fB\(rq\\t\(rq\fP is converted to a literal tab inside a
+double quoted string.  If you use a single quoted string, you
+would have to type an actual tab character, and would need to
+convert the double\-backslashes to single backslashes.
+.IP
+Note: the result of this regexp match against the subject is
+stored in the header cache.  Mutt isn't smart enough to
+invalidate a header cache entry based on changing $reply_regexp,
+so if you aren't seeing correct values in the index, try
+temporarily turning off the header cache.  If that fixes the
+problem, then once the variable is set to your liking, remove
+your stale header cache files and turn the header cache back on.
 
 
 .TP
@@ -5658,7 +5836,7 @@ using the value of $realname.
 .B rfc2047_parameters
 .nf
 Type: boolean
-Default: no
+Default: yes
 .fi
 .IP
 When this variable is \fIset\fP, Mutt will decode RFC2047\-encoded MIME
@@ -5862,6 +6040,13 @@ arguments as recipient addresses.  Mutt appends all recipients after
 adding a \fB\-\-\fP delimiter (if not already present).  Additional
 flags, such as for $use_8bitmime, $use_envelope_from,
 $dsn_notify, or $dsn_return will be added before the delimiter.
+.IP
+\fBNote:\fP This command is invoked differently from most other
+commands in Mutt.  It is tokenized by space, and invoked directly
+via \fBexecvp(3)\fP with an array of arguments \- so commands or
+arguments with spaces in them are not supported.  The shell is
+not used to run the command, so shell quoting is also not
+supported.
 .IP
 \fBSee also:\fP $write_bcc.
 
@@ -6150,7 +6335,7 @@ names relative to the previous name. Here's an example:
 .B sidebar_sort_method
 .nf
 Type: sort order
-Default: order
+Default: unsorted
 .fi
 .IP
 Specifies how to sort mailbox entries in the sidebar.  By default, the
@@ -6840,6 +7025,15 @@ are:
 .IP
 You may optionally use the \(lqreverse\-\(rq prefix to specify reverse sorting
 order (example: \(lq\fBset sort=reverse\-date\-sent\fP\(rq).
+.IP
+For values except \(lqthreads\(rq, this provides the primary sort
+method.  When two message sort values are equal, $sort_aux will
+be used for a secondary sort.
+.IP
+When set to \(lqthreads\(rq, Mutt threads messages in the index. It
+uses the variable $sort_thread_groups to sort between threads
+(at the top/root level), and $sort_aux to sort sub\-threads and
+children.
 
 
 .TP
@@ -6869,17 +7063,18 @@ Type: sort order
 Default: date
 .fi
 .IP
-This provides a secondary sort for messages in the \(lqindex\(rq menu, used
-when the $sort value is equal for two messages.
+For non\-threaded mode, this provides a secondary sort for
+messages in the \(lqindex\(rq menu, used when the $sort value is
+equal for two messages.
 .IP
-When sorting by threads, this variable controls how threads are sorted
-in relation to other threads, and how the branches of the thread trees
-are sorted.  This can be set to any value that $sort can, except
-\(lqthreads\(rq (in that case, mutt will just use \(lqdate\-sent\(rq).  You can also
-specify the \(lqlast\-\(rq prefix in addition to the \(lqreverse\-\(rq prefix, but \(lqlast\-\(rq
-must come after \(lqreverse\-\(rq.  The \(lqlast\-\(rq prefix causes messages to be
-sorted against its siblings by which has the last descendant, using
-the rest of $sort_aux as an ordering.  For instance,
+When sorting by threads, this variable controls how the branches
+of the thread trees are sorted.  This can be set to any value
+that $sort can, except \(lqthreads\(rq (in that case, mutt will just
+use \(lqdate\-sent\(rq).  You can also specify the \(lqlast\-\(rq prefix in
+addition to the \(lqreverse\-\(rq prefix, but \(lqlast\-\(rq must come
+after \(lqreverse\-\(rq.  The \(lqlast\-\(rq prefix causes messages to be
+sorted against its siblings by which has the last descendant,
+using the rest of $sort_aux as an ordering.  For instance,
 
 .IP
 .EX
@@ -6887,9 +7082,8 @@ set sort_aux=last\-date\-received
 
 .EE
 .IP
-would mean that if a new message is received in a
-thread, that thread becomes the last one displayed (or the first, if
-you have \(lq\fBset sort=reverse\-threads\fP\(rq.)
+would mean that if a new message is received in a sub\-thread,
+that sub\-thread becomes the last one displayed.
 .IP
 Note: For reversed\-threads $sort
 order, $sort_aux is reversed again (which is not the right thing to do,
@@ -6927,6 +7121,37 @@ order (example: \(lq\fBset sort_browser=reverse\-date\fP\(rq).
 
 
 .TP
+.B sort_browser_mailboxes
+.nf
+Type: sort order
+Default: unsorted
+.fi
+.IP
+Specifies how to sort entries in the mailbox browser.  By default, the
+entries are unsorted, displayed in the same order as listed
+in the \(lqmailboxes\(rq command.  Valid values:
+.RS
+.PD 0
+.TP
+\(hy alpha (alphabetically)
+.TP
+\(hy count
+.TP
+\(hy date
+.TP
+\(hy size
+.TP
+\(hy unread
+.TP
+\(hy unsorted
+.RE
+.PD 1
+.IP
+You may optionally use the \(lqreverse\-\(rq prefix to specify reverse sorting
+order (example: \(lq\fBset sort_browser_mailboxes=reverse\-alpha\fP\(rq).
+
+
+.TP
 .B sort_re
 .nf
 Type: boolean
@@ -6941,6 +7166,32 @@ the subject of the child message starts with a substring matching the
 setting of $reply_regexp.  With $sort_re \fIunset\fP, mutt will attach
 the message whether or not this is the case, as long as the
 non\-$reply_regexp parts of both messages are identical.
+
+
+.TP
+.B sort_thread_groups
+.nf
+Type: sort order
+Default: aux
+.fi
+.IP
+When sorting by threads, this variable controls how threads are
+sorted in relation to other threads (at the top/root level).
+This can be set to any value that $sort can, except \(lqthreads\(rq.
+You can also specify the \(lqlast\-\(rq prefix in addition to the
+\(lqreverse\-\(rq prefix, but \(lqlast\-\(rq must come after \(lqreverse\-\(rq.
+The \(lqlast\-\(rq prefix causes messages to be sorted against its
+siblings by which has the last descendant, using the rest of
+$sort_thread_groups as an ordering.
+.IP
+For backward compatibility, the default value is \(lqaux\(rq, which
+means to use $sort_aux for top\-level thread sorting too.  The
+value \(lqaux\(rq does not respect \(lqlast\-\(rq or \(lqreverse\-\(rq
+prefixes, it simply delegates sorting directly to $sort_aux.
+.IP
+Note: For reversed\-threads $sort order, $sort_thread_groups is
+reversed again (which is not the right thing to do, but kept to
+not break any existing configuration setting).
 
 
 .TP
@@ -7154,6 +7405,19 @@ the \fB<account-hook>\fP function.
 
 
 .TP
+.B ssl_verify_host_override
+.nf
+Type: string
+Default: \(lq\(rq
+.fi
+.IP
+Defines an alternate host name to verify the server certificate against.
+This should not be set unless you are sure what you are doing, but it
+might be useful for connection to a .onion host without a properly
+configured host name in the certificate.  See $ssl_verify_host.
+
+
+.TP
 .B ssl_verify_partial_chains
 .nf
 Type: boolean
@@ -7211,7 +7475,7 @@ forwarding, etc. are not permitted in this mode).
 .B status_format
 .nf
 Type: string (localized)
-Default: \(lq\-%r\-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]\-\-\-(%s/%S)\-%>\-(%P)\-\-\-\(rq
+Default: \(lq\-%r\-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]\-\-\-(%s/%?T?%T/?%S)\-%>\-(%P)\-\-\-\(rq
 .fi
 .IP
 Controls the format of the status line displayed in the \(lqindex\(rq
@@ -7278,6 +7542,9 @@ current aux sorting method ($sort_aux)
 .TP
 %t  
 number of tagged messages *
+.TP
+%T  
+current thread group sorting method ($sort_thread_groups) *
 .TP
 %u  
 number of unread messages *
@@ -7407,7 +7674,7 @@ Type: boolean
 Default: yes
 .fi
 .IP
-Affects the \fB~b\fP and \fB~h\fP search operations described in
+Affects the \fB~b\fP, \fB~B\fP, and \fB~h\fP search operations described in
 section \(lqpatterns\(rq.  If \fIset\fP, the headers and body/attachments of
 messages to be searched are decoded before searching. If \fIunset\fP,
 messages are searched as they appear in the folder.
@@ -7621,10 +7888,11 @@ Type: boolean
 Default: yes
 .fi
 .IP
-When \fIset\fP, Mutt will automatically uncollapse any collapsed thread
-that receives a new message. When \fIunset\fP, collapsed threads will
-remain collapsed. the presence of the new message will still affect
-index sorting, though.
+When \fIset\fP, Mutt will automatically uncollapse any collapsed
+thread that receives a newly delivered message.  When
+\fIunset\fP, collapsed threads will remain collapsed. The
+presence of the newly delivered message will still affect index
+sorting, though.
 
 
 .TP

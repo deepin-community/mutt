@@ -21,6 +21,7 @@ cryptglue.c
 crypt-gpgme.c
 curs_lib.c
 curs_main.c
+curs_ti_lib.c
 edit.c
 editmsg.c
 flags.c
@@ -36,6 +37,7 @@ imap/auth_gss.c
 imap/auth_login.c
 imap/auth_oauth.c
 imap/auth_sasl.c
+imap/auth_sasl_gnu.c
 imap/browse.c
 imap/command.c
 imap/imap.c
@@ -45,12 +47,15 @@ init.c
 init.h
 keymap.c
 lib.c
+listmenu.c
 main.c
 mbox.c
 menu.c
+messageid.c
 mh.c
 mutt_lisp.c
 mutt_sasl.c
+mutt_sasl_gnu.c
 mutt_socket.c
 mutt_ssl.c
 mutt_ssl_gnutls.c
@@ -83,3 +88,9 @@ smtp.c
 sort.c
 status.c
 thread.c
+OPS
+OPS.CRYPT
+OPS.MIX
+OPS.PGP
+OPS.SIDEBAR
+OPS.SMIME

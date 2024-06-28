@@ -447,7 +447,7 @@ static void update_crypt_info (compose_redraw_data_t *rd)
 
 static void redraw_mix_line (LIST *chain)
 {
-  int c;
+  size_t c;
   char *t;
 
   SETCOLOR (MT_COLOR_COMPOSE_HEADER);
@@ -632,6 +632,24 @@ static int delete_attachment (ATTACH_CONTEXT *actx, int x)
     idx[rindex]->content->tagged = 0;
     return (-1);
   }
+
+  if (rindex == 0 &&
+      option (OPTCOMPOSECONFIRMDETACH) &&
+      mutt_query_boolean (OPTCOMPOSECONFIRMDETACH,
+  /* L10N:
+     Prompt when trying to hit <detach-file> on the first entry in
+     the compose menu.  This entry is most likely the message they just
+     typed.  Hitting yes will remove the entry and unlink the file, so
+     it's worth confirming they really meant to do it.
+  */
+                          _("Really delete the main message?"), 0) < 1)
+  {
+    idx[rindex]->content->tagged = 0;
+    return (-1);
+  }
+
+  if (idx[rindex]->unowned)
+    idx[rindex]->content->unlink = 0;
 
   for (y = 0; y < actx->idxlen; y++)
   {
@@ -1037,7 +1055,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
   int fccSet = 0;	/* has the user edited the Fcc: field ? */
   CONTEXT *ctx = NULL, *this = NULL;
   /* Sort, SortAux could be changed in mutt_index_menu() */
-  int oldSort, oldSortAux;
+  int oldSort, oldSortAux, oldSortThreadGroups;
   struct stat st;
   compose_redraw_data_t rd = {0};
 
@@ -1126,7 +1144,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 	break;
       case OP_COMPOSE_EDIT_FCC:
 	mutt_buffer_strcpy (fname, mutt_b2s (sctx->fcc));
-	if (mutt_buffer_get_field (_("Fcc: "), fname, MUTT_FILE | MUTT_CLEAR) == 0)
+	if (mutt_buffer_get_field (_("Fcc: "), fname, MUTT_MAILBOX | MUTT_CLEAR) == 0)
 	{
 	  mutt_buffer_strcpy (sctx->fcc, mutt_b2s (fname));
 	  mutt_buffer_pretty_multi_mailbox (sctx->fcc, FccDelimiter);
@@ -1261,6 +1279,8 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
         for (i = 0; i < numfiles; i++)
         {
           char *att = files[i];
+          if (!att)
+            continue;
           new = (ATTACHPTR *) safe_calloc (1, sizeof (ATTACHPTR));
           new->unowned = 1;
           new->content = mutt_make_file_attach (att);
@@ -1333,7 +1353,9 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
         }
 
         this = Context; /* remember current folder and sort methods*/
-        oldSort = Sort; oldSortAux = SortAux;
+        oldSort = Sort;
+        oldSortAux = SortAux;
+        oldSortThreadGroups = SortThreadGroups;
 
         Context = ctx;
         set_option(OPTATTACHMSG);
@@ -1348,6 +1370,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
           /* Restore old $sort and $sort_aux */
           Sort = oldSort;
           SortAux = oldSortAux;
+          SortThreadGroups = oldSortThreadGroups;
           menu->redraw |= REDRAW_INDEX | REDRAW_STATUS;
           break;
         }
@@ -1381,14 +1404,13 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
         /* Restore old $sort and $sort_aux */
         Sort = oldSort;
         SortAux = oldSortAux;
+        SortThreadGroups = oldSortThreadGroups;
       }
       mutt_message_hook (NULL, msg, MUTT_SEND2HOOK);
       break;
 
       case OP_DELETE:
 	CHECK_COUNT;
-        if (CURATTACH->unowned)
-          CURATTACH->content->unlink = 0;
 	if (delete_attachment (actx, menu->current) == -1)
 	  break;
 	mutt_update_compose_menu (actx, menu, 0);
@@ -1666,6 +1688,10 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 
         if ((new->content = mutt_make_file_attach (mutt_b2s (fname))) == NULL)
         {
+          /* L10N:
+             This phrase is a modified quote originally from Cool Hand
+             Luke, intended to be somewhat humorous.
+          */
           mutt_error _("What we have here is a failure to make an attachment");
           FREE (&new);
           continue;
@@ -1699,6 +1725,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
       case OP_COMPOSE_VIEW_ALT:
       case OP_COMPOSE_VIEW_ALT_TEXT:
       case OP_COMPOSE_VIEW_ALT_MAILCAP:
+      case OP_COMPOSE_VIEW_ALT_PAGER:
       {
         BODY *alternative;
 
@@ -1707,7 +1734,7 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
           mutt_error _("$send_multipart_alternative_filter is not set");
           break;
         }
-        alternative = mutt_run_send_alternative_filter (msg->content);
+        alternative = mutt_run_send_alternative_filter (msg);
         if (!alternative)
           break;
 	switch (op)
@@ -1718,6 +1745,9 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
 	  case OP_COMPOSE_VIEW_ALT_MAILCAP:
 	    op = MUTT_MAILCAP;
 	    break;
+	  case OP_COMPOSE_VIEW_ALT_PAGER:
+	    op = MUTT_VIEW_PAGER;
+	    break;
 	  default:
 	    op = MUTT_REGULAR;
 	    break;
@@ -1726,6 +1756,24 @@ int mutt_compose_menu (SEND_CONTEXT *sctx)
         mutt_free_body (&alternative);
         break;
       }
+
+      case OP_ATTACH_VIEW_MAILCAP:
+	mutt_view_attachment (NULL, CURATTACH->content, MUTT_MAILCAP,
+			      NULL, actx);
+	menu->redraw = REDRAW_FULL;
+	break;
+
+      case OP_ATTACH_VIEW_TEXT:
+	mutt_view_attachment (NULL, CURATTACH->content, MUTT_AS_TEXT,
+			      NULL, actx);
+	menu->redraw = REDRAW_FULL;
+	break;
+
+      case OP_ATTACH_VIEW_PAGER:
+	mutt_view_attachment (NULL, CURATTACH->content, MUTT_VIEW_PAGER,
+			      NULL, actx);
+	menu->redraw = REDRAW_FULL;
+	break;
 
       case OP_VIEW_ATTACH:
       case OP_DISPLAY_HEADERS:

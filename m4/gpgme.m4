@@ -9,12 +9,12 @@
 # WITHOUT ANY WARRANTY, to the extent permitted by law; without even the
 # implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 #
-# Last-changed: 2018-11-12
+# Last-changed: 2022-11-02
 
 
 AC_DEFUN([_AM_PATH_GPGME_CONFIG],
 [ AC_ARG_WITH(gpgme-prefix,
-            AC_HELP_STRING([--with-gpgme-prefix=PFX],
+            AS_HELP_STRING([--with-gpgme-prefix=PFX],
                            [prefix where GPGME is installed (optional)]),
      gpgme_config_prefix="$withval", gpgme_config_prefix="")
   if test x"${GPGME_CONFIG}" = x ; then
@@ -37,7 +37,7 @@ AC_DEFUN([_AM_PATH_GPGME_CONFIG],
   fi
 
   use_gpgrt_config=""
-  if test x"${GPGME_CONFIG}" = x -a x"$GPGRT_CONFIG" != x -a "$GPGRT_CONFIG" != "no"; then
+  if test x"$GPGRT_CONFIG" != x -a "$GPGRT_CONFIG" != "no"; then
     if $GPGRT_CONFIG gpgme --exists; then
       GPGME_CONFIG="$GPGRT_CONFIG gpgme"
       AC_MSG_NOTICE([Use gpgrt-config as gpgme-config])

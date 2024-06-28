@@ -38,8 +38,12 @@
 #include "sidebar.h"
 #endif
 
-#ifdef USE_SASL
+#ifdef USE_SASL_CYRUS
 #include "mutt_sasl.h"
+#endif
+
+#ifdef USE_SASL_GNU
+#include "mutt_sasl_gnu.h"
 #endif
 
 #ifdef USE_IMAP
@@ -82,7 +86,7 @@ To report a bug, please contact the Mutt maintainers via gitlab:\n\
     https://gitlab.com/muttmua/mutt/issues\n");
 
 static const char *Notice = N_("\
-Copyright (C) 1996-2021 Michael R. Elkins and others.\n\
+Copyright (C) 1996-2023 Michael R. Elkins and others.\n\
 Mutt comes with ABSOLUTELY NO WARRANTY; for details type `mutt -vv'.\n\
 Mutt is free software, and you are welcome to redistribute it\n\
 under certain conditions; type `mutt -vv' for details.\n");
@@ -96,7 +100,7 @@ Copyright (C) 1999-2017 Brendan Cully <brendan@kublai.com>\n\
 Copyright (C) 1999-2002 Tommi Komulainen <Tommi.Komulainen@iki.fi>\n\
 Copyright (C) 2000-2004 Edmund Grimley Evans <edmundo@rano.org>\n\
 Copyright (C) 2006-2009 Rocco Rutte <pdmef@gmx.net>\n\
-Copyright (C) 2014-2021 Kevin J. McCarthy <kevin@8t8.us>\n";
+Copyright (C) 2014-2023 Kevin J. McCarthy <kevin@8t8.us>\n";
 
 static const char *Thanks = N_("\
 Many others not mentioned here contributed code, fixes,\n\
@@ -149,7 +153,8 @@ options:\n\
   -c <address>\tspecify a carbon-copy (CC) address\n\
   -D\t\tprint the value of all variables to stdout");
 #if DEBUG
-  puts _("  -d <level>\tlog debugging output to ~/.muttdebug0");
+  puts _("  -d <level>\tlog debugging output to ~/.muttdebug0\n\
+\t\t0 => no debugging; <0 => do not rotate .muttdebug files");
 #endif
   puts _(
 "  -E\t\tedit the draft (-H) or include (-i) file\n\
@@ -173,6 +178,10 @@ options:\n\
   -Z\t\topen the first folder with new message, exit immediately if none\n\
   -h\t\tthis help message");
 
+  fflush (stdout);
+
+  if (ferror (stdout))
+    exit (1);
   exit (0);
 }
 
@@ -334,10 +343,15 @@ static void show_version (void)
     "-USE_SSL_GNUTLS  "
 #endif
 
-#ifdef USE_SASL
+#ifdef USE_SASL_CYRUS
     "+USE_SASL  "
 #else
     "-USE_SASL  "
+#endif
+#ifdef USE_SASL_GNU
+    "+USE_GSASL  "
+#else
+    "-USE_GSASL  "
 #endif
 #ifdef USE_GSS
     "+USE_GSS  "
@@ -565,6 +579,10 @@ static void show_version (void)
 
   mutt_print_patchlist();
 
+  fflush (stdout);
+
+  if (ferror (stdout))
+    exit (1);
   exit (0);
 }
 
@@ -580,6 +598,13 @@ static void start_curses (void)
   SLutf8_enable(-1);
 #endif
 #else
+
+# if defined(HAVE_RESIZETERM) && defined(HAVE_USE_TIOCTL)
+  /* mutt_resize_screen() shouldn't be fighting with ncurses */
+  use_env (0);
+  use_tioctl (1);
+# endif
+
   /* should come before initscr() so that ncurses 4.2 doesn't try to install
      its own SIGWINCH handler */
   mutt_signal_init ();
@@ -595,6 +620,7 @@ static void start_curses (void)
   keypad (stdscr, TRUE);
   cbreak ();
   noecho ();
+  nonl ();
 #if HAVE_TYPEAHEAD
   typeahead (-1);       /* simulate smooth scrolling */
 #endif
@@ -643,7 +669,7 @@ int main (int argc, char **argv, char **environ)
   if (getegid() != getgid())
   {
     fprintf(stderr, "%s: I don't want to run with privileges!\n",
-	    argv[0]);
+	    argc ? argv[0] : "mutt");
     exit(1);
   }
 
@@ -742,11 +768,7 @@ int main (int argc, char **argv, char **environ)
 
         case 'd':
 #ifdef DEBUG
-          if (mutt_atoi (optarg, &debuglevel) < 0 || debuglevel <= 0)
-          {
-            fprintf (stderr, _("Error: value '%s' is invalid for -d.\n"), optarg);
-            return 1;
-          }
+          mutt_atoi (optarg, &debuglevel, 0);
           printf (_("Debugging at level %d.\n"), debuglevel);
 #else
           printf ("%s", _("DEBUG was not defined during compilation.  Ignored.\n"));
@@ -840,6 +862,9 @@ int main (int argc, char **argv, char **environ)
       puts (_(Obtaining));
       puts (_(ReachingUs));
       mutt_buffer_free (&folder);
+      fflush (stdout);
+      if (ferror (stdout))
+        exit (1);
       exit (0);
   }
 
@@ -849,6 +874,10 @@ int main (int argc, char **argv, char **environ)
     set_option (OPTNOCURSES);
     sendflags = SENDBATCH;
   }
+
+  /* Check to make sure stdout is available in curses mode. */
+  if (!option (OPTNOCURSES) && !isatty (1))
+    exit (1);
 
   /* Always create the mutt_windows because batch mode has some shared code
    * paths that end up referencing them. */
@@ -960,8 +989,8 @@ int main (int argc, char **argv, char **environ)
       mutt_flushinp ();
     mutt_send_message (SENDPOSTPONED, NULL, NULL, NULL, NULL);
   }
-  else if (subject || msg || sendflags || draftFile || includeFile || attach ||
-	   optind < argc)
+  else if (subject || msg || (sendflags & SENDMAILX) || draftFile ||
+           includeFile || attach || optind < argc)
   {
     FILE *fin = NULL;
     FILE *fout = NULL;
@@ -1009,7 +1038,11 @@ int main (int argc, char **argv, char **environ)
     }
 
     if (subject)
+    {
       msg->env->subject = safe_strdup (subject);
+      /* prevent header injection */
+      mutt_filter_commandline_header_value (msg->env->subject);
+    }
 
     if (draftFile)
     {
@@ -1126,7 +1159,21 @@ int main (int argc, char **argv, char **environ)
         }
         context_hdr->content->length = st.st_size;
 
-        mutt_prepare_template (fin, NULL, msg, context_hdr, 0);
+        if (mutt_prepare_template (fin, NULL, msg, context_hdr, 0) < 0)
+        {
+          if (!option (OPTNOCURSES))
+          {
+            mutt_endwin (NULL);
+            set_option (OPTNOCURSES);
+          }
+          /* L10N:
+             Error when using -H command line argument, but reading the draft
+             file fails for some reason.
+          */
+          fputs (_("Cannot parse draft file\n"), stderr);
+          goto cleanup_and_exit;
+        }
+
 
         /* Scan for mutt header to set OPTRESUMEDRAFTFILES */
         for (last_uhp = &msg->env->userhdrs, uh = *last_uhp;
@@ -1269,6 +1316,14 @@ int main (int argc, char **argv, char **environ)
     if (rv)
       goto cleanup_and_exit;
   }
+  /* This guards against invoking `mutt < /dev/null` and accidentally
+   * sending an email due to a my_hdr or other setting.
+   */
+  else if (sendflags & SENDBATCH)
+  {
+    fputs (_("No recipients specified.\n"), stderr);
+    goto cleanup_and_exit;
+  }
   else
   {
     if (!folder)
@@ -1359,8 +1414,11 @@ cleanup_and_exit:
 #ifdef USE_IMAP
   imap_logout_all ();
 #endif
-#ifdef USE_SASL
+#ifdef USE_SASL_CYRUS
   mutt_sasl_done ();
+#endif
+#ifdef USE_SASL_GNU
+  mutt_gsasl_done ();
 #endif
 #ifdef USE_AUTOCRYPT
   mutt_autocrypt_cleanup ();

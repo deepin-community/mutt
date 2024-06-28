@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1996-2000,2013 Michael R. Elkins <me@mutt.org>
- * Copyright (C) 2020 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2020-2022 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -128,7 +128,6 @@ int mutt_background_process_waitpid (void)
 
 static pid_t mutt_background_run (const char *cmd)
 {
-  struct sigaction act;
   pid_t thepid;
   int fd;
 
@@ -157,14 +156,8 @@ static pid_t mutt_background_run (const char *cmd)
     close (2);
 #endif
 
-    /* reset signals for the child; not really needed, but... */
     mutt_unblock_signals_system (0);
-    act.sa_handler = SIG_DFL;
-    act.sa_flags = 0;
-    sigemptyset (&act.sa_mask);
-    sigaction (SIGTERM, &act, NULL);
-    sigaction (SIGTSTP, &act, NULL);
-    sigaction (SIGCONT, &act, NULL);
+    mutt_reset_child_signals ();
 
     execle (EXECSHELL, "sh", "-c", cmd, NULL, mutt_envlist ());
     _exit (127); /* execl error */
@@ -474,7 +467,7 @@ static void update_bg_menu (MUTTMENU *menu)
   }
 }
 
-static MUTTMENU *create_bg_menu ()
+static MUTTMENU *create_bg_menu (void)
 {
   MUTTMENU *menu = NULL;
   BACKGROUND_PROCESS *process;

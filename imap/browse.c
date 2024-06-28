@@ -259,7 +259,7 @@ int imap_mailbox_create (const char* folder, BUFFER *result)
     buf[n] = '\0';
   }
 
-  if (mutt_get_field (_("Create mailbox: "), buf, sizeof (buf), MUTT_FILE) < 0)
+  if (mutt_get_field (_("Create mailbox: "), buf, sizeof (buf), MUTT_MAILBOX) < 0)
     goto fail;
 
   if (!mutt_strlen (buf))
@@ -314,7 +314,7 @@ int imap_mailbox_rename(const char* mailbox, BUFFER *result)
   snprintf(buf, sizeof (buf), _("Rename mailbox %s to: "), mx.mbox);
   strfcpy (newname, mx.mbox, sizeof (newname));
 
-  if (mutt_get_field (buf, newname, sizeof (newname), MUTT_FILE) < 0)
+  if (mutt_get_field (buf, newname, sizeof (newname), MUTT_MAILBOX) < 0)
     goto fail;
 
   if (!mutt_strlen (newname))
@@ -403,7 +403,7 @@ static void imap_add_folder (char delim, char *folder, int noselect,
   if (imap_parse_path (state->folder, &mx))
     return;
 
-  if (state->entrylen + 1 == state->entrymax)
+  if (state->entrylen == state->entrymax)
   {
     safe_realloc (&state->entry,
                   sizeof (struct folder_file) * (state->entrymax += 256));
@@ -440,6 +440,8 @@ static void imap_add_folder (char delim, char *folder, int noselect,
   }
 
   (state->entry)[state->entrylen].display_name = safe_strdup (relpath);
+
+  (state->entry)[state->entrylen].number = state->entrylen;
 
   (state->entry)[state->entrylen].imap = 1;
   /* delimiter at the root is useless. */

@@ -33,6 +33,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "mutt.h"
 #include "charset.h"
@@ -245,7 +246,7 @@ void mutt_canonical_charset (char *dest, size_t dlen, const char *name)
 {
   size_t i;
   char *p, *ext;
-  char in[LONG_STRING], scratch[LONG_STRING];
+  char in[LONG_STRING], scratch[LONG_STRING+10];
 
   strfcpy (in, name, sizeof (in));
   if ((ext = strchr (in, '/')))
@@ -294,7 +295,7 @@ out:
 int mutt_chscmp (const char *s, const char *chs)
 {
   char buffer[STRING];
-  int a, b;
+  size_t a, b;
 
   if (!s) return 0;
 
@@ -311,16 +312,21 @@ int mutt_chscmp (const char *s, const char *chs)
 			     a > b ? chs : buffer, MIN(a,b));
 }
 
-char *mutt_get_default_charset ()
+char *mutt_get_default_charset (void)
 {
   static char fcharset[SHORT_STRING];
   const char *c = AssumedCharset;
   const char *c1;
+  size_t copysize;
 
   if (c)
   {
     c1 = strchr (c, ':');
-    strfcpy (fcharset, c, c1 ? (c1 - c + 1) : sizeof (fcharset));
+    if (c1)
+      copysize = MIN ((c1 - c + 1), sizeof (fcharset));
+    else
+      copysize = sizeof (fcharset);
+    strfcpy (fcharset, c, copysize);
     return fcharset;
   }
   return strcpy (fcharset, "us-ascii"); /* __STRCPY_CHECKED__ */
@@ -445,7 +451,7 @@ size_t mutt_iconv (iconv_t cd, ICONV_CONST char **inbuf, size_t *inbytesleft,
       iconv (cd, 0, 0, &ob, &obl);
       if (obl)
       {
-	int n = strlen (outrepl);
+	size_t n = strlen (outrepl);
 	if (n > obl)
 	{
 	  outrepl = "?";
@@ -484,7 +490,6 @@ int mutt_convert_string (char **ps, const char *from, const char *to, int flags)
 
   if (to && from && (cd = mutt_iconv_open (to, from, flags)) != (iconv_t)-1)
   {
-    int len;
     ICONV_CONST char *ib;
     char *buf, *ob;
     size_t ibl, obl;
@@ -498,12 +503,19 @@ int mutt_convert_string (char **ps, const char *from, const char *to, int flags)
     else
       outrepl = "?";
 
-    len = strlen (s);
-    ib = s, ibl = len + 1;
+    ib = s;
+    ibl = strlen (s);
+    if (ibl >= SIZE_MAX / MB_LEN_MAX)
+    {
+      iconv_close (cd);
+      return -1;
+    }
+
     obl = MB_LEN_MAX * ibl;
     ob = buf = safe_malloc (obl + 1);
 
     mutt_iconv (cd, &ib, &ibl, &ob, &obl, inrepls, outrepl);
+    iconv (cd, 0, 0, &ob, &obl);
     iconv_close (cd);
 
     *ob = '\0';

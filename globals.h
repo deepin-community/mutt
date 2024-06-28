@@ -92,6 +92,7 @@ WHERE long  HeaderCachePageSize;
 #endif /* HAVE_GDBM || HAVE_DB4 */
 #endif /* USE_HCACHE */
 WHERE char *MarkMacroPrefix;
+WHERE char *MessageIdFormat;
 WHERE char *MhFlagged;
 WHERE char *MhReplied;
 WHERE char *MhUnseen;
@@ -163,6 +164,7 @@ WHERE char *SslCiphers;
 WHERE short SslDHPrimeBits;
 WHERE char *SslCACertFile;
 #endif
+WHERE char *SslVerifyHostOverride;
 #endif
 WHERE mbchar_table *StChars;
 WHERE char *Status;
@@ -232,6 +234,7 @@ WHERE short HistSize;
 WHERE short MenuContext;
 WHERE short PagerContext;
 WHERE short PagerIndexLines;
+WHERE short PagerSkipQuotedContext;
 WHERE short ReadInc;
 WHERE short ReflowWrap;
 WHERE short SaveHist;

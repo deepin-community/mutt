@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1996-2002,2010,2013 Michael R. Elkins <me@mutt.org>
  * Copyright (C) 2004 g10 Code GmbH
- * Copyright (C) 2018 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2018,2020 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ BUFFER *mutt_buffer_init (BUFFER *);
 void mutt_buffer_free (BUFFER **);
 BUFFER *mutt_buffer_from (char *);
 void mutt_buffer_clear (BUFFER *);
+void mutt_buffer_rewind (BUFFER *);
 
 size_t mutt_buffer_len (BUFFER *);
 void mutt_buffer_increase_size (BUFFER *, size_t);
