@@ -24,38 +24,52 @@
 #include "mutt_curses.h"
 #include "mutt_menu.h"
 #include "mapping.h"
+#include "color.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 
 /* globals */
-int *ColorQuote;
+COLOR_ATTR *ColorQuote;
 int ColorQuoteUsed;
-int ColorDefs[MT_COLOR_MAX];
+COLOR_ATTR ColorDefs[MT_COLOR_MAX];
 COLOR_LINE *ColorHdrList = NULL;
 COLOR_LINE *ColorBodyList = NULL;
 COLOR_LINE *ColorIndexList = NULL;
 
 /* local to this file */
 static int ColorQuoteSize;
+#if defined(HAVE_COLOR) && defined(HAVE_USE_DEFAULT_COLORS)
+static int HaveDefaultColors = 0;
+static int DefaultColorsInit = 0;
+#endif
+
+#define COLOR_UNSET (-2)
 
 #ifdef HAVE_COLOR
 
-#define COLOR_DEFAULT (-2)
+#define COLOR_DEFAULT (-1)
 
 typedef struct color_list
 {
-  int pair;
   short fg;
   short bg;
-  short index;
+  short pair;
   short count;
+  unsigned int ansi : 1;
+  unsigned int overlay : 1;
   struct color_list *next;
 } COLOR_LIST;
 
+/* color type for mutt_alloc_color() */
+#define MUTT_COLOR_TYPE_NORMAL     1
+#define MUTT_COLOR_TYPE_ANSI       2
+#define MUTT_COLOR_TYPE_OVERLAY    3
+
 static COLOR_LIST *ColorList = NULL;
 static int UserColors = 0;
+static int AnsiColors = 0;
 
 static const struct mapping_t Colors[] =
 {
@@ -125,11 +139,16 @@ static const struct mapping_t ComposeFields[] =
 #define ATTR_MASK (~(unsigned int)A_NORMAL ^ (A_CHARTEXT | A_UNUSED | A_COLOR))
 #endif
 
+#ifdef HAVE_COLOR
+static void mutt_free_color (int pair);
+#endif
+
+
 static COLOR_LINE *mutt_new_color_line (void)
 {
   COLOR_LINE *p = safe_calloc (1, sizeof (COLOR_LINE));
 
-  p->fg = p->bg = -1;
+  p->fg = p->bg = COLOR_UNSET;
 
   return (p);
 }
@@ -145,8 +164,8 @@ static void mutt_free_color_line(COLOR_LINE **l,
   tmp = *l;
 
 #ifdef HAVE_COLOR
-  if (free_colors && tmp->fg != -1 && tmp->bg != -1)
-    mutt_free_color(tmp->fg, tmp->bg);
+  if (free_colors && tmp->color.pair)
+    mutt_free_color (tmp->color.pair);
 #endif
 
   /* we should really introduce a container
@@ -159,25 +178,34 @@ static void mutt_free_color_line(COLOR_LINE **l,
   FREE (l);		/* __FREE_CHECKED__ */
 }
 
+#if defined(HAVE_COLOR) && defined(HAVE_USE_DEFAULT_COLORS)
+static void init_default_colors (void)
+{
+  DefaultColorsInit = 1;
+  if (use_default_colors () == OK)
+    HaveDefaultColors = 1;
+}
+#endif /* defined(HAVE_COLOR) && defined(HAVE_USE_DEFAULT_COLORS) */
+
 void ci_start_color (void)
 {
-  memset (ColorDefs, A_NORMAL, sizeof (int) * MT_COLOR_MAX);
-  ColorQuote = (int *) safe_malloc (COLOR_QUOTE_INIT * sizeof (int));
-  memset (ColorQuote, A_NORMAL, sizeof (int) * COLOR_QUOTE_INIT);
+  memset (ColorDefs, 0, sizeof (COLOR_ATTR) * MT_COLOR_MAX);
+  ColorQuote = (COLOR_ATTR *) safe_malloc (COLOR_QUOTE_INIT * sizeof (COLOR_ATTR));
+  memset (ColorQuote, 0, sizeof (COLOR_ATTR) * COLOR_QUOTE_INIT);
   ColorQuoteSize = COLOR_QUOTE_INIT;
   ColorQuoteUsed = 0;
 
   /* set some defaults */
-  ColorDefs[MT_COLOR_STATUS] = A_REVERSE;
-  ColorDefs[MT_COLOR_INDICATOR] = A_REVERSE;
-  ColorDefs[MT_COLOR_SEARCH] = A_REVERSE;
-  ColorDefs[MT_COLOR_MARKERS] = A_REVERSE;
+  ColorDefs[MT_COLOR_STATUS].attrs = A_REVERSE;
+  ColorDefs[MT_COLOR_INDICATOR].attrs = A_REVERSE;
+  ColorDefs[MT_COLOR_SEARCH].attrs = A_REVERSE;
+  ColorDefs[MT_COLOR_MARKERS].attrs = A_REVERSE;
 #ifdef USE_SIDEBAR
-  ColorDefs[MT_COLOR_HIGHLIGHT] = A_UNDERLINE;
+  ColorDefs[MT_COLOR_HIGHLIGHT].attrs = A_UNDERLINE;
 #endif
   /* special meaning: toggle the relevant attribute */
-  ColorDefs[MT_COLOR_BOLD] = 0;
-  ColorDefs[MT_COLOR_UNDERLINE] = 0;
+  ColorDefs[MT_COLOR_BOLD].attrs = 0;
+  ColorDefs[MT_COLOR_UNDERLINE].attrs = 0;
 
 #ifdef HAVE_COLOR
   start_color ();
@@ -225,16 +253,16 @@ static char *get_color_name (char *dest, size_t destlen, int val)
 }
 #endif
 
-static COLOR_LIST *mutt_find_color_by_pair (int pair)
+static COLOR_LIST *find_color_list_entry_by_pair (int pair)
 {
   COLOR_LIST *p = ColorList;
 
   while (p)
   {
     if (p->pair == pair)
-    {
       return p;
-    }
+    if (p->pair > pair)
+      return NULL;
     p = p->next;
   }
 
@@ -243,152 +271,245 @@ static COLOR_LIST *mutt_find_color_by_pair (int pair)
 
 #endif /* HAVE_COLOR */
 
-int mutt_merge_colors (int source_pair, int overlay_pair)
+COLOR_ATTR mutt_merge_colors (COLOR_ATTR source, COLOR_ATTR overlay)
 {
 #ifdef HAVE_COLOR
-  COLOR_LIST *source, *overlay;
+  COLOR_LIST *source_color_entry, *overlay_color_entry;
   int merged_fg, merged_bg;
 #endif
-  int merged_pair;
-
-  merged_pair = overlay_pair;
+  COLOR_ATTR merged = {0};
 
 #ifdef HAVE_COLOR
-  overlay = mutt_find_color_by_pair (overlay_pair & A_COLOR);
+  merged.pair = overlay.pair;
 
-  if (overlay && (overlay->fg < 0 || overlay->bg < 0))
+  overlay_color_entry = find_color_list_entry_by_pair (overlay.pair);
+
+  if (overlay_color_entry &&
+      (overlay_color_entry->fg < 0 || overlay_color_entry->bg < 0))
   {
-    source = mutt_find_color_by_pair (source_pair & A_COLOR);
-    if (source)
+    source_color_entry = find_color_list_entry_by_pair (source.pair);
+    if (source_color_entry)
     {
-      merged_fg = overlay->fg < 0 ? source->fg : overlay->fg;
-      merged_bg = overlay->bg < 0 ? source->bg : overlay->bg;
-      merged_pair = mutt_alloc_color (merged_fg, merged_bg, 0);
+      merged_fg = overlay_color_entry->fg < 0 ?
+        source_color_entry->fg :
+        overlay_color_entry->fg;
+      merged_bg = overlay_color_entry->bg < 0 ?
+        source_color_entry->bg :
+        overlay_color_entry->bg;
+      merged.pair = mutt_alloc_overlay_color (merged_fg, merged_bg);
     }
   }
 #endif /* HAVE_COLOR */
 
-  merged_pair |= (source_pair & ATTR_MASK) | (overlay_pair & ATTR_MASK);
+  merged.attrs = source.attrs | overlay.attrs;
 
-  return merged_pair;
+  return merged;
 }
 
-void mutt_attrset_cursor (int source_pair, int cursor_pair)
+void mutt_attrset_cursor (COLOR_ATTR source, COLOR_ATTR cursor)
 {
-  int merged_pair = cursor_pair;
+  COLOR_ATTR merged = cursor;
 
   if (option (OPTCURSOROVERLAY))
-    merged_pair = mutt_merge_colors (source_pair, cursor_pair);
+    merged = mutt_merge_colors (source, cursor);
 
-  ATTRSET (merged_pair);
+  ATTRSET (merged);
 }
 
 #ifdef HAVE_COLOR
 
-int mutt_alloc_color (int fg, int bg, int ref)
+static int _mutt_alloc_color (int fg, int bg, int type)
 {
-  COLOR_LIST *p = ColorList;
-  int i;
+  COLOR_LIST *p, **last;
+  int pair;
 
 #if defined (USE_SLANG_CURSES)
   char fgc[SHORT_STRING], bgc[SHORT_STRING];
 #endif
 
-  /* check to see if this color is already allocated to save space */
+  /* Check to see if this color is already allocated to save space.
+   *
+   * At the same time, find the lowest available index, and location
+   * in the list to store a new entry. The ColorList is sorted by
+   * pair.  "last" points to &(previousentry->next), giving us the
+   * slot to store it in.
+   */
+  pair = 1;
+  last = &ColorList;
+  p = *last;
+
   while (p)
   {
     if (p->fg == fg && p->bg == bg)
     {
-      if (ref)
+      if (type == MUTT_COLOR_TYPE_ANSI)
+      {
+        if (!p->ansi)
+        {
+          p->ansi = 1;
+          AnsiColors++;
+        }
+      }
+      else if (type == MUTT_COLOR_TYPE_OVERLAY)
+        p->overlay = 1;
+      else
         (p->count)++;
+
       return p->pair;
     }
+
+    if (p->pair <= pair)
+    {
+      last = &p->next;
+      pair = p->pair + 1;
+    }
+
     p = p->next;
   }
 
-  /* check to see if there are colors left */
-  if (++UserColors > COLOR_PAIRS) return (A_NORMAL);
+  /* check to see if there are colors left.
+   * note: pair 0 is reserved for "default" so we actually only have access
+   * to COLOR_PAIRS-1 pairs. */
+  if (UserColors >= (COLOR_PAIRS - 1))
+    return (0);
 
-  /* find the smallest available index (object) */
-  i = 1;
-  FOREVER
-  {
-    p = ColorList;
-    while (p)
-    {
-      if (p->index == i) break;
-      p = p->next;
-    }
-    if (p == NULL) break;
-    i++;
-  }
+  /* Check for pair overflow too.  We are currently using init_pair(), which
+   * only accepts size short. */
+  if ((pair > SHRT_MAX) || (pair < 0))
+    return (0);
 
-  p = (COLOR_LIST *) safe_malloc (sizeof (COLOR_LIST));
-  p->next = ColorList;
-  ColorList = p;
+  UserColors++;
 
-  p->index = i;
-  p->count = 1;
+  p = (COLOR_LIST *) safe_calloc (1, sizeof (COLOR_LIST));
+  p->next = *last;
+  *last = p;
+
+  p->pair = pair;
   p->bg = bg;
   p->fg = fg;
+  if (type == MUTT_COLOR_TYPE_ANSI)
+  {
+    p->ansi = 1;
+    AnsiColors++;
+  }
+  else if (type == MUTT_COLOR_TYPE_OVERLAY)
+    p->overlay = 1;
+  else
+    p->count = 1;
 
 #if defined (USE_SLANG_CURSES)
   if (fg == COLOR_DEFAULT || bg == COLOR_DEFAULT)
-    SLtt_set_color (i, NULL, get_color_name (fgc, sizeof (fgc), fg), get_color_name (bgc, sizeof (bgc), bg));
+  {
+    SLtt_set_color (pair, NULL,
+                    get_color_name (fgc, sizeof (fgc), fg),
+                    get_color_name (bgc, sizeof (bgc), bg));
+  }
   else
-#elif defined (HAVE_USE_DEFAULT_COLORS)
-    if (fg == COLOR_DEFAULT)
-      fg = -1;
-  if (bg == COLOR_DEFAULT)
-    bg = -1;
 #endif
 
-  init_pair(i, fg, bg);
+  /* NOTE: this may be the "else" clause of the SLANG #if block above. */
+  {
+    init_pair (p->pair, fg, bg);
+  }
 
   dprint (3, (debugfile,"mutt_alloc_color(): Color pairs used so far: %d\n",
 	      UserColors));
 
-  p->pair = COLOR_PAIR (p->index);
-
   return p->pair;
 }
 
-void mutt_free_color (int fg, int bg)
+int mutt_alloc_color (int fg, int bg)
 {
-  COLOR_LIST *p, *q;
+  return _mutt_alloc_color (fg, bg, MUTT_COLOR_TYPE_NORMAL);
+}
 
-  p = ColorList;
+int mutt_alloc_ansi_color (int fg, int bg)
+{
+  if (fg == COLOR_DEFAULT || bg == COLOR_DEFAULT)
+  {
+#if defined (HAVE_USE_DEFAULT_COLORS)
+    if (!DefaultColorsInit)
+      init_default_colors ();
+
+    if (!HaveDefaultColors)
+      return 0;
+#elif !defined (USE_SLANG_CURSES)
+    return 0;
+#endif
+  }
+
+  return _mutt_alloc_color (fg, bg, MUTT_COLOR_TYPE_ANSI);
+}
+
+int mutt_alloc_overlay_color (int fg, int bg)
+{
+  return _mutt_alloc_color (fg, bg, MUTT_COLOR_TYPE_OVERLAY);
+}
+
+
+/* This is used to delete NORMAL type colors only.
+ * Overlay colors are currently allowed to accumulate.
+ * Ansi colors are deleted all at once, upon exiting the pager.
+ */
+static void mutt_free_color (int pair)
+{
+  COLOR_LIST *p, **last;
+
+  last = &ColorList;
+  p = *last;
+
   while (p)
   {
-    if (p->fg == fg && p->bg == bg)
+    if (p->pair == pair)
     {
       (p->count)--;
-      if (p->count > 0) return;
+
+      if (p->count > 0 || p->ansi || p->overlay)
+        return;
 
       UserColors--;
       dprint(1,(debugfile,"mutt_free_color(): Color pairs used so far: %d\n",
                 UserColors));
 
-      if (p == ColorList)
-      {
-	ColorList = ColorList->next;
-	FREE (&p);
-	return;
-      }
-      q = ColorList;
-      while (q)
-      {
-	if (q->next == p)
-	{
-	  q->next = p->next;
-	  FREE (&p);
-	  return;
-	}
-	q = q->next;
-      }
-      /* can't get here */
+      *last = p->next;
+      FREE (&p);
+      return;
     }
-    p = p->next;
+    if (p->pair > pair)
+      return;
+
+    last = &p->next;
+    p = *last;
+  }
+}
+
+void mutt_free_all_ansi_colors (void)
+{
+  COLOR_LIST *p, **last;
+
+  last = &ColorList;
+  p = *last;
+
+  while (p && AnsiColors > 0)
+  {
+    if (p->ansi)
+    {
+      p->ansi = 0;
+      AnsiColors--;
+
+      if (!p->count && !p->overlay)
+      {
+        UserColors--;
+
+        *last = p->next;
+        FREE (&p);
+        p = *last;
+        continue;
+      }
+    }
+
+    last = &p->next;
+    p = *last;
   }
 }
 
@@ -426,10 +547,17 @@ parse_color_name (const char *s, int *col, int *attr, int is_fg, BUFFER *err)
       return (-1);
     }
   }
-  else if ((*col = mutt_getvaluebyname (s, Colors)) == -1)
+  else
   {
-    snprintf (err->data, err->dsize, _("%s: no such color"), s);
-    return (-1);
+    /* Note: mutt_getvaluebyname() returns -1 for "not found".
+     * Since COLOR_DEFAULT is -1, we need to use this function instead. */
+    const struct mapping_t *entry = mutt_get_mapentry_by_name (s, Colors);
+    if (!entry)
+    {
+      snprintf (err->data, err->dsize, _("%s: no such color"), s);
+      return (-1);
+    }
+    *col = entry->value;
   }
 
   if (is_bright || is_light)
@@ -506,14 +634,14 @@ static int _mutt_parse_uncolor (BUFFER *buf, BUFFER *s, BUFFER *err, short parse
     return (-1);
   }
 
-  if (mutt_strncmp (buf->data, "index", 5) == 0)
+  if (object == MT_COLOR_INDEX)
   {
     is_index = 1;
     list = &ColorIndexList;
   }
-  else if (mutt_strncmp (buf->data, "body", 4) == 0)
+  else if (object == MT_COLOR_BODY)
     list = &ColorBodyList;
-  else if (mutt_strncmp (buf->data, "header", 6) == 0)
+  else if (object == MT_COLOR_HEADER)
     list = &ColorHdrList;
   else
   {
@@ -596,7 +724,10 @@ static int _mutt_parse_uncolor (BUFFER *buf, BUFFER *s, BUFFER *err, short parse
     mutt_set_menu_redraw_full (MENU_MAIN);
     /* force re-caching of index colors */
     for (i = 0; Context && i < Context->msgcount; i++)
-      Context->hdrs[i]->pair = 0;
+    {
+      Context->hdrs[i]->color.pair = 0;
+      Context->hdrs[i]->color.attrs = 0;
+    }
   }
   return (0);
 }
@@ -632,20 +763,20 @@ add_pattern (COLOR_LINE **top, const char *s, int sensitive,
   if (tmp)
   {
 #ifdef HAVE_COLOR
-    if (fg != -1 && bg != -1)
+    if (fg != COLOR_UNSET && bg != COLOR_UNSET)
     {
       if (tmp->fg != fg || tmp->bg != bg)
       {
-	mutt_free_color (tmp->fg, tmp->bg);
+	mutt_free_color (tmp->color.pair);
 	tmp->fg = fg;
 	tmp->bg = bg;
-	attr |= mutt_alloc_color (fg, bg, 1);
+        tmp->color.pair = mutt_alloc_color (fg, bg);
       }
       else
-	attr |= (tmp->pair & ~A_BOLD);
+	attr |= (tmp->color.attrs & ~A_BOLD);
     }
 #endif /* HAVE_COLOR */
-    tmp->pair = attr;
+    tmp->color.attrs = attr;
   }
   else
   {
@@ -675,14 +806,14 @@ add_pattern (COLOR_LINE **top, const char *s, int sensitive,
     tmp->next = *top;
     tmp->pattern = safe_strdup (s);
 #ifdef HAVE_COLOR
-    if (fg != -1 && bg != -1)
+    if (fg != COLOR_UNSET && bg != COLOR_UNSET)
     {
       tmp->fg = fg;
       tmp->bg = bg;
-      attr |= mutt_alloc_color (fg, bg, 1);
+      tmp->color.pair = mutt_alloc_color (fg, bg);
     }
 #endif
-    tmp->pair = attr;
+    tmp->color.attrs = attr;
     *top = tmp;
   }
 
@@ -692,7 +823,10 @@ add_pattern (COLOR_LINE **top, const char *s, int sensitive,
     int i;
 
     for (i = 0; Context && i < Context->msgcount; i++)
-      Context->hdrs[i]->pair = 0;
+    {
+      Context->hdrs[i]->color.pair = 0;
+      Context->hdrs[i]->color.attrs = 0;
+    }
   }
 
   return 0;
@@ -711,7 +845,7 @@ parse_object(BUFFER *buf, BUFFER *s, int *o, int *ql, BUFFER *err)
   }
 
   mutt_extract_token(buf, s, 0);
-  if (!mutt_strncmp(buf->data, "quoted", 6))
+  if (!ascii_strncasecmp(buf->data, "quoted", 6))
   {
     if (buf->data[6])
     {
@@ -809,8 +943,8 @@ static int
 parse_attr_spec(BUFFER *buf, BUFFER *s, int *fg, int *bg, int *attr, BUFFER *err)
 {
 
-  if (fg) *fg = -1;
-  if (bg) *bg = -1;
+  if (fg) *fg = COLOR_UNSET;
+  if (bg) *bg = COLOR_UNSET;
 
   if (! MoreArgs (s))
   {
@@ -841,14 +975,15 @@ parse_attr_spec(BUFFER *buf, BUFFER *s, int *fg, int *bg, int *attr, BUFFER *err
   return 0;
 }
 
-static int fgbgattr_to_color(int fg, int bg, int attr)
+static COLOR_ATTR fgbgattr_to_color (int fg, int bg, int attr)
 {
+  COLOR_ATTR color_attr = {0};
 #ifdef HAVE_COLOR
-  if (fg != -1 && bg != -1)
-    return attr | mutt_alloc_color(fg, bg, 1);
-  else
+  if (fg != COLOR_UNSET && bg != COLOR_UNSET)
+    color_attr.pair = mutt_alloc_color (fg, bg);
 #endif
-    return attr;
+  color_attr.attrs = attr;
+  return color_attr;
 }
 
 /* usage: color <object> <fg> <bg> [ <regexp> ]
@@ -892,18 +1027,21 @@ _mutt_parse_color (BUFFER *buf, BUFFER *s, BUFFER *err,
   if (dry_run) return 0;
 
 
-#ifdef HAVE_COLOR
-# ifdef HAVE_USE_DEFAULT_COLORS
-  if (!option (OPTNOCURSES) && has_colors()
-      /* delay use_default_colors() until needed, since it initializes things */
-      && (fg == COLOR_DEFAULT || bg == COLOR_DEFAULT)
-      && use_default_colors () != OK)
+#if defined(HAVE_COLOR) && defined(HAVE_USE_DEFAULT_COLORS)
+  if (!option (OPTNOCURSES) &&
+      has_colors() &&
+      (fg == COLOR_DEFAULT || bg == COLOR_DEFAULT))
   {
-    strfcpy (err->data, _("default colors not supported"), err->dsize);
-    return (-1);
+    /* delay use_default_colors() until needed, since it initializes things */
+    if (!DefaultColorsInit)
+      init_default_colors ();
+    if (!HaveDefaultColors)
+    {
+      strfcpy (err->data, _("default colors not supported"), err->dsize);
+      return (-1);
+    }
   }
-# endif /* HAVE_USE_DEFAULT_COLORS */
-#endif
+#endif  /* defined(HAVE_COLOR) && defined(HAVE_USE_DEFAULT_COLORS) */
 
   if (object == MT_COLOR_HEADER)
     r = add_pattern (&ColorHdrList, buf->data, 0, fg, bg, attr, err,0);
@@ -918,7 +1056,7 @@ _mutt_parse_color (BUFFER *buf, BUFFER *s, BUFFER *err,
   {
     if (q_level >= ColorQuoteSize)
     {
-      safe_realloc (&ColorQuote, (ColorQuoteSize += 2) * sizeof (int));
+      safe_realloc (&ColorQuote, (ColorQuoteSize += 2) * sizeof (COLOR_ATTR));
       ColorQuote[ColorQuoteSize-2] = ColorDefs[MT_COLOR_QUOTED];
       ColorQuote[ColorQuoteSize-1] = ColorDefs[MT_COLOR_QUOTED];
     }
@@ -931,7 +1069,7 @@ _mutt_parse_color (BUFFER *buf, BUFFER *s, BUFFER *err,
       ColorQuote[0] = ColorDefs[MT_COLOR_QUOTED];
       for (q_level = 1; q_level < ColorQuoteUsed; q_level++)
       {
-	if (ColorQuote[q_level] == A_NORMAL)
+	if (ColorQuote[q_level].pair == 0 && ColorQuote[q_level].attrs == 0)
 	  ColorQuote[q_level] = ColorDefs[MT_COLOR_QUOTED];
       }
     }

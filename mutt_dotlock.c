@@ -64,7 +64,14 @@
 # define LONG_STRING 1024
 # define MAXLOCKATTEMPT 5
 
-# define strfcpy(A,B,C) strncpy (A,B,C), *(A+(C)-1)=0
+#ifdef HAVE_MEMCCPY
+# define strfcpy(A,B,C) memccpy(A,B,0,(C)-1), *((A)+(C)-1)=0
+#else
+/* Note it would be technically more correct to strncpy with length
+ * (C)-1, as above.  But this tickles more compiler warnings.
+ */
+# define strfcpy(A,B,C) strncpy(A,B,C), *((A)+(C)-1)=0
+#endif
 
 # ifdef USE_SETGID
 
@@ -77,10 +84,6 @@
 #   define S_ISLNK(x) (((x) & S_IFMT) == S_IFLNK ? 1 : 0)
 #  endif
 
-# endif
-
-# ifndef HAVE_SNPRINTF
-extern int snprintf (char *, size_t, const char *, ...);
 # endif
 
 #else  /* DL_STANDALONE */
@@ -106,7 +109,7 @@ static gid_t UserGid;
 static gid_t MailGid;
 #endif
 
-static int dotlock_deference_symlink (char *, size_t, const char *);
+static int dotlock_dereference_symlink (char *, size_t, const char *);
 static int dotlock_prepare (char *, size_t, const char *, int fd);
 static int dotlock_check_stats (struct stat *, struct stat *);
 static int dotlock_dispatch (const char *, int fd);
@@ -177,8 +180,8 @@ int main (int argc, char **argv)
     }
   }
 
-  if (optind == argc || Retry < 0)
-    usage (argv[0]);
+  if (optind >= argc || Retry < 0)
+    usage (argc ? argv[0] : "mutt_dotlock");
 
   return dotlock_dispatch (argv[optind], -1);
 }
@@ -381,7 +384,7 @@ usage (const char *av0)
  * To avoid this attack, we proceed as follows:
  *
  * - First, follow symbolic links a la
- *   dotlock_deference_symlink ().
+ *   dotlock_dereference_symlink ().
  *
  * - get the result's dirname.
  *
@@ -446,7 +449,7 @@ dotlock_prepare (char *bn, size_t l, const char *f, int _fd)
   int fd;
   int r;
 
-  if (dotlock_deference_symlink (realpath, sizeof (realpath), f) == -1)
+  if (dotlock_dereference_symlink (realpath, sizeof (realpath), f) == -1)
     return -1;
 
   if ((p = strrchr (realpath, '/')))
@@ -526,14 +529,14 @@ dotlock_expand_link (char *newpath, const char *path, const char *link)
 
 
 /*
- * Deference a chain of symbolic links
+ * Dereference a chain of symbolic links
  *
  * The final path is written to d.
  *
  */
 
 static int
-dotlock_deference_symlink (char *d, size_t l, const char *path)
+dotlock_dereference_symlink (char *d, size_t l, const char *path)
 {
   struct stat sb;
   char realpath[_POSIX_PATH_MAX];

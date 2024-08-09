@@ -25,6 +25,7 @@
 #include "mutt.h"
 #include "account.h"
 #include "url.h"
+#include "mutt_curses.h"
 
 /* mutt_account_match: compare account info (host/port/user) */
 int mutt_account_match (const ACCOUNT* a1, const ACCOUNT* a2)
@@ -74,11 +75,13 @@ int mutt_account_fromurl (ACCOUNT* account, ciss_url_t* url)
   {
     strfcpy (account->user, url->user, sizeof (account->user));
     account->flags |= MUTT_ACCT_USER;
+    account->flags |= MUTT_ACCT_USER_FROM_URL;
   }
   if (url->pass)
   {
     strfcpy (account->pass, url->pass, sizeof (account->pass));
     account->flags |= MUTT_ACCT_PASS;
+    account->flags |= MUTT_ACCT_PASS_FROM_URL;
   }
   if (url->port)
   {
@@ -89,11 +92,20 @@ int mutt_account_fromurl (ACCOUNT* account, ciss_url_t* url)
   return 0;
 }
 
-/* mutt_account_tourl: fill URL with info from account. The URL information
- *   is a set of pointers into account - don't free or edit account until
- *   you've finished with url (make a copy of account if you need it for
- *   a while). */
-void mutt_account_tourl (ACCOUNT* account, ciss_url_t* url)
+/* Fill URL with info from account. The URL information
+ * is a set of pointers into account - don't free or edit account until
+ * you've finished with url (make a copy of account if you need it for
+ * a while).
+ *
+ * By default "url" will be populated with the same data that was in
+ * the URL which "account" was parsed from.  That is, user and
+ * password won't be assigned unless they were in the URL too.
+ *
+ * However, for header and body cache, we always want to include the username
+ * to prevent cross-muttrc name collisions.  For that case, pass 1 to
+ * force_users
+ */
+void mutt_account_tourl (ACCOUNT* account, ciss_url_t* url, int force_user)
 {
   url->scheme = U_UNKNOWN;
   url->user = NULL;
@@ -134,9 +146,15 @@ void mutt_account_tourl (ACCOUNT* account, ciss_url_t* url)
   if (account->flags & MUTT_ACCT_PORT)
     url->port = account->port;
   if (account->flags & MUTT_ACCT_USER)
-    url->user = account->user;
-  if (account->flags & MUTT_ACCT_PASS)
+  {
+    if (force_user || (account->flags & MUTT_ACCT_USER_FROM_URL))
+      url->user = account->user;
+  }
+  if ((account->flags & MUTT_ACCT_PASS) &&
+      (account->flags & MUTT_ACCT_PASS_FROM_URL))
+  {
     url->pass = account->pass;
+  }
 }
 
 /* mutt_account_getuser: retrieve username into ACCOUNT, if necessary */
@@ -198,8 +216,19 @@ int mutt_account_getlogin (ACCOUNT* account)
   return 0;
 }
 
-/* mutt_account_getpass: fetch password into ACCOUNT, if necessary */
-int mutt_account_getpass (ACCOUNT* account)
+static void getpass_prompt (char *prompt, size_t prompt_size, ACCOUNT *account)
+{
+  /* L10N:
+     Prompt for an account password when connecting.
+     %s@%s is user@host
+  */
+  snprintf (prompt, prompt_size, _("Password for %s@%s: "),
+            account->flags & MUTT_ACCT_LOGIN ? account->login : account->user,
+            account->host);
+}
+
+int _mutt_account_getpass (ACCOUNT* account,
+                           void (*prompt_func) (char *, size_t, ACCOUNT *))
 {
   char prompt[SHORT_STRING];
 
@@ -221,9 +250,7 @@ int mutt_account_getpass (ACCOUNT* account)
     return -1;
   else
   {
-    snprintf (prompt, sizeof (prompt), _("Password for %s@%s: "),
-              account->flags & MUTT_ACCT_LOGIN ? account->login : account->user,
-              account->host);
+    prompt_func (prompt, sizeof(prompt), account);
     account->pass[0] = '\0';
     if (mutt_get_password (prompt, account->pass, sizeof (account->pass)))
       return -1;
@@ -234,9 +261,16 @@ int mutt_account_getpass (ACCOUNT* account)
   return 0;
 }
 
+/* mutt_account_getpass: fetch password into ACCOUNT, if necessary */
+int mutt_account_getpass (ACCOUNT *account)
+{
+  return _mutt_account_getpass (account, getpass_prompt);
+}
+
 void mutt_account_unsetpass (ACCOUNT* account)
 {
   account->flags &= ~MUTT_ACCT_PASS;
+  account->flags &= ~MUTT_ACCT_PASS_FROM_URL;
 }
 
 /* mutt_account_getoauthbearer: call external command to generate the
@@ -296,6 +330,10 @@ int mutt_account_getoauthbearer (ACCOUNT* account, BUFFER *authbearer, int xoaut
   token = mutt_read_line (NULL, &token_size, fp, NULL, 0);
   safe_fclose (&fp);
   mutt_wait_filter (pid);
+
+  /* The refresh cmd in some cases will invoke gpg to decrypt a token */
+  if (!option (OPTNOCURSES))
+    mutt_need_hard_redraw ();
 
   if (token == NULL || *token == '\0')
   {

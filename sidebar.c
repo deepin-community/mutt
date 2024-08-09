@@ -1,7 +1,7 @@
 /* Copyright (C) 2004 Justin Hibbits <jrh29@po.cwru.edu>
  * Copyright (C) 2004 Thomer M. Gil <mutt@thomer.com>
  * Copyright (C) 2015-2016 Richard Russon <rich@flatcap.org>
- * Copyright (C) 2016-2017 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2016-2017,2020-2022 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -189,9 +189,9 @@ static const char *cb_format_str(char *dest, size_t destlen, size_t col, int col
   }
 
   if (optional)
-    mutt_FormatString (dest, destlen, col, SidebarWidth, ifstring,   cb_format_str, sbe, flags);
+    mutt_FormatString (dest, destlen, col, cols, ifstring,   cb_format_str, sbe, flags);
   else if (flags & MUTT_FORMAT_OPTIONAL)
-    mutt_FormatString (dest, destlen, col, SidebarWidth, elsestring, cb_format_str, sbe, flags);
+    mutt_FormatString (dest, destlen, col, cols, elsestring, cb_format_str, sbe, flags);
 
   /* We return the format string, unchanged */
   return src;
@@ -258,14 +258,15 @@ static int cb_qsort_sbe (const void *a, const void *b)
 
   switch ((SidebarSortMethod & SORT_MASK))
   {
+    /* Note: the three numeric counts below are reversed on purpose. */
     case SORT_COUNT:
-      result = (b2->msg_count - b1->msg_count);
+      result = mutt_numeric_cmp (b2->msg_count, b1->msg_count);
       break;
     case SORT_UNREAD:
-      result = (b2->msg_unread - b1->msg_unread);
+      result = mutt_numeric_cmp (b2->msg_unread, b1->msg_unread);
       break;
     case SORT_FLAGGED:
-      result = (b2->msg_flagged - b1->msg_flagged);
+      result = mutt_numeric_cmp (b2->msg_flagged, b1->msg_flagged);
       break;
     case SORT_PATH:
       result = mutt_strcasecmp (mutt_b2s (b1->pathbuf), mutt_b2s (b2->pathbuf));
@@ -499,7 +500,7 @@ static int draw_divider (int num_rows, int num_cols)
   int i;
   for (i = 0; i < num_rows; i++)
   {
-    mutt_window_move (MuttSidebarWindow, i, SidebarWidth - delim_len);	//RAR 0 for rhs
+    mutt_window_move (MuttSidebarWindow, i, num_cols - delim_len);	//RAR 0 for rhs
     addstr (NONULL(SidebarDividerChar));
   }
 
@@ -642,7 +643,7 @@ static void draw_sidebar (int num_rows, int num_cols, int div_width)
   last_folder_name = mutt_buffer_pool_get ();
   indent_folder_name = mutt_buffer_pool_get ();
 
-  int w = MIN(num_cols, (SidebarWidth - div_width));
+  int w = num_cols - div_width;
   int row = 0;
   for (entryidx = TopIndex; (entryidx < EntryCount) && (row < num_rows); entryidx++)
   {
@@ -655,7 +656,8 @@ static void draw_sidebar (int num_rows, int num_cols, int div_width)
       entry_color = MT_COLOR_NEW;
     else if (b->msg_flagged > 0)
       entry_color = MT_COLOR_FLAGGED;
-    else if ((ColorDefs[MT_COLOR_SB_SPOOLFILE] != 0) &&
+    else if ((ColorDefs[MT_COLOR_SB_SPOOLFILE].pair != 0 ||
+              ColorDefs[MT_COLOR_SB_SPOOLFILE].attrs != 0) &&
              (mutt_strcmp (mutt_b2s (b->pathbuf), Spoolfile) == 0))
       entry_color = MT_COLOR_SB_SPOOLFILE;
     else
@@ -663,7 +665,8 @@ static void draw_sidebar (int num_rows, int num_cols, int div_width)
 
     if (entryidx == OpnIndex)
     {
-      if ((ColorDefs[MT_COLOR_SB_INDICATOR] != 0))
+      if ((ColorDefs[MT_COLOR_SB_INDICATOR].pair != 0 ||
+           ColorDefs[MT_COLOR_SB_INDICATOR].attrs != 0))
 	mutt_attrset_cursor (ColorDefs[entry_color],
 		ColorDefs[MT_COLOR_SB_INDICATOR]);
       else
@@ -827,12 +830,15 @@ void mutt_sb_draw (void)
   int num_rows  = MuttSidebarWindow->rows;
   int num_cols  = MuttSidebarWindow->cols;
 
+  if (!num_cols)
+    return;
+
   int div_width = draw_divider (num_rows, num_cols);
-  if (div_width < 0)
+  if ((div_width < 0) || (div_width >= num_cols))
     return;
 
   if (!prepare_sidebar (num_rows))
-    fill_empty_space (0, num_rows, SidebarWidth - div_width);
+    fill_empty_space (0, num_rows, num_cols - div_width);
   else
     draw_sidebar (num_rows, num_cols, div_width);
 }

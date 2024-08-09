@@ -113,6 +113,49 @@ static short count_tagged_children (ATTACH_CONTEXT *actx, short i)
   return count;
 }
 
+/* Look through the recipients of the message we are replying to, and if
+ * we find an address that matches $alternates, we use that as the default
+ * from field.
+ *
+ * This is partically duplicated logic from set_reverse_name() but
+ * with with different data structures.  Also, in the attach case, we
+ * can have both cur and actx non-NULL in some cases.
+ */
+static ADDRESS *attach_set_reverse_name (HEADER *cur, ATTACH_CONTEXT *actx)
+{
+  ADDRESS *tmp = NULL;
+  int i;
+
+  if (cur)
+    tmp = mutt_find_user_in_envelope (cur->env);
+
+  /* Note that, for replying, we can have a case where both cur and act are
+   * not null, so don't use an 'else' for the second test */
+  if (!tmp && actx)
+  {
+    for (i = 0; i < actx->idxlen; i++)
+      if (actx->idx[i]->content->tagged && actx->idx[i]->content->hdr)
+        if ((tmp = mutt_find_user_in_envelope (actx->idx[i]->content->hdr->env)) != NULL)
+          break;
+  }
+
+  if (tmp)
+  {
+    tmp = rfc822_cpy_adr_real (tmp);
+    /* when $reverse_realname is not set, clear the personal name so that it
+     * may be set vi a reply- or send-hook.
+     */
+    if (!option (OPTREVREAL))
+    {
+      FREE (&tmp->personal);
+#ifdef EXACT_ADDRESS
+      FREE (&tmp->val);
+#endif
+    }
+  }
+  return (tmp);
+}
+
 
 
 /**
@@ -503,7 +546,7 @@ static void attach_forward_bodies (FILE * fp, HEADER * hdr,
 
   if (option (OPTFORWQUOTE))
     st.prefix = prefix;
-  st.flags = MUTT_CHARCONV;
+  st.flags = MUTT_FORWARDING | MUTT_CHARCONV;
   if (option (OPTWEED))
     st.flags |= MUTT_WEED;
   st.fpout = tmpfp;
@@ -554,6 +597,9 @@ static void attach_forward_bodies (FILE * fp, HEADER * hdr,
 
   safe_fclose (&tmpfp);
 
+  if (option (OPTREVNAME))
+    tmphdr->env->from = attach_set_reverse_name (parent_hdr, NULL);
+
   /* now that we have the template, send it. */
   mutt_send_message (SENDBACKGROUNDEDIT, tmphdr, mutt_b2s (tmpbody), NULL,
                      parent_hdr);
@@ -594,9 +640,6 @@ static void attach_forward_msgs (FILE * fp, HEADER * hdr,
   BUFFER *tmpbody = NULL;
   FILE *tmpfp = NULL;
 
-  int cmflags = 0;
-  int chflags = CH_XMIT;
-
   if (cur)
     curhdr = cur->hdr;
   else
@@ -619,6 +662,8 @@ static void attach_forward_msgs (FILE * fp, HEADER * hdr,
   if ((rc = query_quadoption (OPT_MIMEFWD,
                               _("Forward MIME encapsulated?"))) == MUTT_NO)
   {
+    int cmflags = MUTT_CM_FORWARDING;
+    int chflags = CH_DECODE;
 
     /* no MIME encapsulation */
 
@@ -685,6 +730,10 @@ static void attach_forward_msgs (FILE * fp, HEADER * hdr,
   else
     mutt_free_header (&tmphdr);
 
+  if (option (OPTREVNAME))
+    tmphdr->env->from = attach_set_reverse_name (cur ? curhdr : NULL,
+                                                 cur ? NULL : actx);
+
   mutt_send_message (SENDBACKGROUNDEDIT, tmphdr,
                      mutt_buffer_len (tmpbody) ? mutt_b2s (tmpbody) : NULL,
                      NULL, curhdr);
@@ -743,6 +792,11 @@ void mutt_attach_mail_sender (FILE *fp, HEADER *hdr, ATTACH_CONTEXT *actx,
 	return;
     }
   }
+
+  if (option (OPTREVNAME))
+    tmphdr->env->from = attach_set_reverse_name (cur ? cur->hdr : NULL,
+                                                 cur ? NULL : actx);
+
   mutt_send_message (SENDBACKGROUNDEDIT, tmphdr, NULL, NULL, NULL);
 }
 
@@ -844,7 +898,7 @@ attach_reply_envelope_defaults (ENVELOPE *env, ATTACH_CONTEXT *actx,
 
 static void attach_include_reply (FILE *fp, FILE *tmpfp, HEADER *cur, int flags)
 {
-  int cmflags = MUTT_CM_PREFIX | MUTT_CM_DECODE | MUTT_CM_CHARCONV;
+  int cmflags = MUTT_CM_PREFIX | MUTT_CM_DECODE | MUTT_CM_CHARCONV | MUTT_CM_REPLYING;
   int chflags = CH_DECODE;
 
   mutt_make_attribution (Context, cur, tmpfp);
@@ -853,7 +907,7 @@ static void attach_include_reply (FILE *fp, FILE *tmpfp, HEADER *cur, int flags)
     cmflags |= MUTT_CM_NOHEADER;
   if (option (OPTWEED))
   {
-    chflags |= CH_WEED;
+    chflags |= CH_WEED | CH_REORDER;
     cmflags |= MUTT_CM_WEED;
   }
 
@@ -949,7 +1003,7 @@ void mutt_attach_reply (FILE * fp, HEADER * hdr,
       strfcpy (prefix, ">", sizeof (prefix));
 
     st.prefix = prefix;
-    st.flags  = MUTT_CHARCONV;
+    st.flags  = MUTT_CHARCONV | MUTT_REPLYING;
 
     if (option (OPTWEED))
       st.flags |= MUTT_WEED;
@@ -991,6 +1045,11 @@ void mutt_attach_reply (FILE * fp, HEADER * hdr,
   }
 
   safe_fclose (&tmpfp);
+
+  if (option (OPTREVNAME))
+    tmphdr->env->from = attach_set_reverse_name (parent_hdr ? parent_hdr :
+                                                 (cur ? cur->hdr : NULL),
+                                                 cur ? NULL : actx);
 
   if (mutt_send_message (flags, tmphdr, mutt_b2s (tmpbody), NULL,
                          parent_hdr ? parent_hdr : (cur ? cur->hdr : NULL)) == 0)

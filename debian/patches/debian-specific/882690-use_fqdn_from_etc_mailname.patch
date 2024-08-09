@@ -4,9 +4,13 @@ used, rather than calling gethostbyname() on the actual hostname.
 This patch is based on Md.etc_mailname_gethostbyname.patch which did not apply
 cleanly to mutt 1.9.1 so I decided to rewrite to use the mutt libraries.
 
+---
+ init.c |   65 ++++++++++++++++++++++++++++++++++++++++++++++++-----------------
+ 1 file changed, 48 insertions(+), 17 deletions(-)
+
 --- a/init.c
 +++ b/init.c
-@@ -135,6 +135,30 @@
+@@ -170,6 +170,30 @@ static int mutt_option_index (char *s)
    return (-1);
  }
  
@@ -37,7 +41,7 @@ cleanly to mutt 1.9.1 so I decided to rewrite to use the mutt libraries.
  int mutt_extract_token (BUFFER *dest, BUFFER *tok, int flags)
  {
    char		ch;
-@@ -3874,39 +3898,44 @@
+@@ -4005,8 +4029,8 @@ void mutt_init (int skip_sys_rc, LIST *c
  
  
    /* If not set in the muttrc or mutt_execute_commands(), set Fqdn ($hostname).
@@ -47,10 +51,11 @@ cleanly to mutt 1.9.1 so I decided to rewrite to use the mutt libraries.
 +   * configured domain, DNS or uname (in order) */
    if (!Fqdn)
    {
- #ifdef DOMAIN
+     dprint (1, (debugfile, "Setting $hostname\n"));
+@@ -4014,28 +4038,35 @@ void mutt_init (int skip_sys_rc, LIST *c
      domain = safe_strdup (DOMAIN);
  #endif /* DOMAIN */
--
+ 
 -    if (domain)
 +    if ((p = getmailname()))
 +    {
@@ -95,9 +100,6 @@ cleanly to mutt 1.9.1 so I decided to rewrite to use the mutt libraries.
 -       * network.
 -       */
 -      Fqdn = safe_strdup(utsname.nodename);
+     dprint (1, (debugfile, "$hostname set to \"%s\"\n", NONULL (Fqdn)));
    }
  
--
-   mutt_read_histfile ();
- 
-   FREE (&err.data);

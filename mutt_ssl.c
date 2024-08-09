@@ -80,7 +80,6 @@ typedef struct
 {
   SSL_CTX *ctx;
   SSL *ssl;
-  X509 *cert;
   unsigned char isopen;
 }
 sslsockdata;
@@ -114,8 +113,10 @@ static int ssl_load_certificates (SSL_CTX *ctx)
   FILE *fp;
   X509 *cert = NULL;
   X509_STORE *store;
-  char buf[STRING];
   int rv = 1;
+#ifdef DEBUG
+  char buf[STRING];
+#endif
 
   dprint (2, (debugfile, "ssl_load_certificates: loading trusted certificates\n"));
   store = SSL_CTX_get_cert_store (ctx);
@@ -181,6 +182,28 @@ static int ssl_set_verify_partial (SSL_CTX *ctx)
   return rv;
 }
 
+/* Reset the min/max proto version allowed so that enabling old
+ * (insecure) protocols inside Mutt will actually use them.
+ *
+ * SSL_CTX_set_min/max_proto_version were added in OpenSSL 1.1 and
+ * LibreSSL 2.6.1.
+ */
+static void reset_allowed_proto_version_range (sslsockdata *ssldata)
+{
+#if (!defined(LIBRESSL_VERSION_NUMBER) &&       \
+     defined(OPENSSL_VERSION_NUMBER) &&         \
+     OPENSSL_VERSION_NUMBER >= 0x10100000L)     \
+  ||                                            \
+  (defined(LIBRESSL_VERSION_NUMBER) &&          \
+   LIBRESSL_VERSION_NUMBER >= 0x2060100fL)
+
+  /* 0 is magic for lowest/highest possible value in these calls */
+  SSL_CTX_set_min_proto_version (ssldata->ctx, 0);
+  SSL_CTX_set_max_proto_version (ssldata->ctx, 0);
+
+#endif
+}
+
 /* mutt_ssl_starttls: Negotiate TLS over an already opened connection.
  *   TODO: Merge this code better with ssl_socket_open. */
 int mutt_ssl_starttls (CONNECTION* conn)
@@ -217,6 +240,9 @@ int mutt_ssl_starttls (CONNECTION* conn)
     dprint (1, (debugfile, "mutt_ssl_starttls: Error allocating SSL_CTX\n"));
     goto bail_ssldata;
   }
+
+  reset_allowed_proto_version_range (ssldata);
+
 #ifdef SSL_OP_NO_TLSv1_3
   if (!option(OPTTLSV1_3))
     ssl_options |= SSL_OP_NO_TLSv1_3;
@@ -496,6 +522,8 @@ static int ssl_socket_open (CONNECTION * conn)
     return -1;
   }
 
+  reset_allowed_proto_version_range (data);
+
   /* disable SSL protocols as needed */
   if (!option(OPTTLSV1))
   {
@@ -579,7 +607,10 @@ static int ssl_socket_open (CONNECTION * conn)
 static int ssl_negotiate (CONNECTION *conn, sslsockdata* ssldata)
 {
   int err;
-  const char* errmsg;
+  const char *errmsg;
+  char *hostname;
+
+  hostname = SslVerifyHostOverride ? SslVerifyHostOverride : conn->account.host;
 
   if ((HostExDataIndex = SSL_get_ex_new_index (0, "host", NULL, NULL, NULL)) == -1)
   {
@@ -587,7 +618,7 @@ static int ssl_negotiate (CONNECTION *conn, sslsockdata* ssldata)
     return -1;
   }
 
-  if (! SSL_set_ex_data (ssldata->ssl, HostExDataIndex, conn->account.host))
+  if (! SSL_set_ex_data (ssldata->ssl, HostExDataIndex, hostname))
   {
     dprint (1, (debugfile, "failed to save hostname in SSL structure\n"));
     return -1;
@@ -608,7 +639,7 @@ static int ssl_negotiate (CONNECTION *conn, sslsockdata* ssldata)
   SSL_set_verify (ssldata->ssl, SSL_VERIFY_PEER, ssl_verify_callback);
   SSL_set_mode (ssldata->ssl, SSL_MODE_AUTO_RETRY);
 
-  if (!SSL_set_tlsext_host_name (ssldata->ssl, conn->account.host))
+  if (!SSL_set_tlsext_host_name (ssldata->ssl, hostname))
   {
     /* L10N: This is a warning when trying to set the host name for
      * TLS Server Name Indication (SNI).  This allows the server to present
@@ -660,11 +691,6 @@ static int ssl_socket_close (CONNECTION * conn)
     if (data->isopen)
       SSL_shutdown (data->ssl);
 
-    /* hold onto this for the life of mutt, in case we want to reconnect.
-     * The purist in me wants a mutt_exit hook. */
-#if 0
-    X509_free (data->cert);
-#endif
     SSL_free (data->ssl);
     SSL_CTX_free (data->ctx);
     FREE (&conn->sockdata);
@@ -1224,13 +1250,21 @@ static int interactive_check_cert (X509 *cert, int idx, int len, SSL *ssl, int a
   char helpstr[LONG_STRING];
   char buf[STRING];
   char title[STRING];
-  MUTTMENU *menu = mutt_new_menu (MENU_GENERIC);
+  MUTTMENU *menu;
   int done;
   BUFFER *drow = NULL;
   unsigned u;
   FILE *fp;
   int allow_skip = 0, reset_ignoremacro = 0;
 
+  if (option (OPTNOCURSES))
+  {
+    dprint (1, (debugfile, "interactive_check_cert: unable to prompt for certificate in batch mode\n"));
+    mutt_error _("Untrusted server certificate");
+    return 0;
+  }
+
+  menu = mutt_new_menu (MENU_GENERIC);
   mutt_push_current_menu (menu);
 
   drow = mutt_buffer_pool_get ();
@@ -1396,22 +1430,44 @@ static void ssl_get_client_cert(sslsockdata *ssldata, CONNECTION *conn)
     SSL_CTX_use_certificate_file(ssldata->ctx, SslClientCert, SSL_FILETYPE_PEM);
     SSL_CTX_use_PrivateKey_file(ssldata->ctx, SslClientCert, SSL_FILETYPE_PEM);
 
+#if 0
+    /* This interferes with SMTP client-cert authentication that doesn't
+     * use AUTH EXTERNAL. (see gitlab #336)
+     *
+     * The mutt_sasl.c code sets up callbacks to get the login or
+     * user, and it looks like the Cyrus SASL external code calls
+     * those.
+     *
+     * Brendan doesn't recall if this really was necessary at one time, so
+     * I'm disabling it.
+     */
+
     /* if we are using a client cert, SASL may expect an external auth name */
     mutt_account_getuser (&conn->account);
+#endif
   }
+}
+
+static void client_cert_prompt (char *prompt, size_t prompt_size, ACCOUNT *account)
+{
+  /* L10N:
+     When using a $ssl_client_cert, OpenSSL may prompt for the password
+     to decrypt the cert.  %s is the hostname.
+  */
+  snprintf (prompt, prompt_size, _("Password for %s client cert: "),
+            account->host);
 }
 
 static int ssl_passwd_cb(char *buf, int size, int rwflag, void *userdata)
 {
-  ACCOUNT *account = (ACCOUNT*)userdata;
+  ACCOUNT *account;
 
-  if (mutt_account_getuser (account))
+  if (!buf || size <= 0 || !userdata)
     return 0;
 
-  dprint (2, (debugfile, "ssl_passwd_cb: getting password for %s@%s:%u\n",
-	      account->user, account->host, account->port));
+  account = (ACCOUNT *) userdata;
 
-  if (mutt_account_getpass (account))
+  if (_mutt_account_getpass (account, client_cert_prompt))
     return 0;
 
   return snprintf(buf, size, "%s", account->pass);

@@ -138,8 +138,10 @@ static char *fsl = "\007";
 short mutt_ts_capability(void)
 {
   char *term = getenv("TERM");
-  char *tcaps;
+  const char *tcaps;
+#ifdef HAVE_USE_EXTENDED_NAMES
   int tcapi;
+#endif
   char **termp;
   char *known[] = {
     "color-xterm",
@@ -155,13 +157,13 @@ short mutt_ts_capability(void)
   };
 
   /* If tsl is set, then terminfo says that status lines work. */
-  tcaps = tigetstr("tsl");
+  tcaps = mutt_tigetstr ("tsl");
   if (tcaps && tcaps != (char *)-1 && *tcaps)
   {
     /* update the static defns of tsl/fsl from terminfo */
     tsl = safe_strdup(tcaps);
 
-    tcaps = tigetstr("fsl");
+    tcaps = mutt_tigetstr ("fsl");
     if (tcaps && tcaps != (char *)-1 && *tcaps)
       fsl = safe_strdup(tcaps);
 
@@ -172,16 +174,16 @@ short mutt_ts_capability(void)
   /* Beware: tigetflag returns -1 if XT is invalid or not a boolean. */
 #ifdef HAVE_USE_EXTENDED_NAMES
   use_extended_names (TRUE);
-  tcapi = tigetflag("XT");
+  tcapi = mutt_tigetflag ("XT");
   if (tcapi == 1)
     return 1;
 #endif /* HAVE_USE_EXTENDED_NAMES */
 
   /* Check term types that are known to support the standard escape without
    * necessarily asserting it in terminfo. */
-  for (termp = known; termp; termp++)
+  for (termp = known; *termp; termp++)
   {
-    if (term && *termp && mutt_strncasecmp (term, *termp, strlen(*termp)))
+    if (term && !mutt_strncasecmp (term, *termp, strlen(*termp)))
       return 1;
   }
 
@@ -269,15 +271,15 @@ void index_make_entry (char *s, size_t l, MUTTMENU *menu, int num)
   _mutt_make_string (s, l, NONULL (HdrFmt), Context, h, flag);
 }
 
-int index_color (int index_no)
+COLOR_ATTR index_color (int index_no)
 {
   HEADER *h = Context->hdrs[Context->v2r[index_no]];
 
-  if (h && h->pair)
-    return h->pair;
+  if (h && (h->color.pair || h->color.attrs))
+    return h->color;
 
   mutt_set_header_color (Context, h);
-  return h->pair;
+  return h->color;
 }
 
 static int ci_next_undeleted (int msgno)
@@ -323,16 +325,34 @@ static int ci_first_message (void)
     if (old != -1)
       return (old);
 
-    /* If Sort is reverse and not threaded, the latest message is first.
-     * If Sort is threaded, the latest message is first iff exactly one
-     * of Sort and SortAux are reverse.
+    /* If Sort is threaded, the latest message is first iff exactly one
+     * of Sort and the top-level sorting method are reverse.
      */
-    if (((Sort & SORT_REVERSE) && (Sort & SORT_MASK) != SORT_THREADS) ||
-	((Sort & SORT_MASK) == SORT_THREADS &&
-	 ((Sort ^ SortAux) & SORT_REVERSE)))
-      return 0;
+    if ((Sort & SORT_MASK) == SORT_THREADS)
+    {
+      if ((SortThreadGroups & SORT_MASK) == SORT_AUX)
+      {
+        if ((Sort ^ SortAux) & SORT_REVERSE)
+          return 0;
+        else
+          return (Context->vcount ? Context->vcount - 1 : 0);
+      }
+      else
+      {
+        if ((Sort ^ SortThreadGroups) & SORT_REVERSE)
+          return 0;
+        else
+          return (Context->vcount ? Context->vcount - 1 : 0);
+      }
+    }
+    /* If Sort is reverse and not threaded, the latest message is first. */
     else
-      return (Context->vcount ? Context->vcount - 1 : 0);
+    {
+      if (Sort & SORT_REVERSE)
+        return 0;
+      else
+        return (Context->vcount ? Context->vcount - 1 : 0);
+    }
   }
   return 0;
 }
@@ -764,6 +784,25 @@ int mutt_index_menu (void)
 
     if (!in_pager)
     {
+
+#if defined (USE_SLANG_CURSES) || defined (HAVE_RESIZETERM)
+      while (SigWinch)
+      {
+        do
+        {
+          SigWinch = 0;
+          mutt_resize_screen ();
+        }
+        while (SigWinch);
+
+	/*
+	 * force a real complete redraw.  clrtobot() doesn't seem to be able
+	 * to handle every case without this.
+	 */
+	clearok(stdscr,TRUE);
+      }
+#endif
+
       index_menu_redraw (menu);
 
       /* give visual indication that the next command is a tag- command */
@@ -786,21 +825,6 @@ int mutt_index_menu (void)
         mutt_window_move (MuttIndexWindow, menu->current - menu->top + menu->offset,
                           MuttIndexWindow->cols - 1);
       mutt_refresh ();
-
-#if defined (USE_SLANG_CURSES) || defined (HAVE_RESIZETERM)
-      if (SigWinch)
-      {
-	SigWinch = 0;
-	mutt_resize_screen ();
-	menu->top = 0; /* so we scroll the right amount */
-	/*
-	 * force a real complete redraw.  clrtobot() doesn't seem to be able
-	 * to handle every case without this.
-	 */
-	clearok(stdscr,TRUE);
-	continue;
-      }
-#endif
 
       op = km_dokey (MENU_MAIN);
 
@@ -931,7 +955,7 @@ int mutt_index_menu (void)
 	  break;
         }
 
-	if (mutt_atoi (buf, &i) < 0)
+	if (mutt_atoi (buf, &i, 0) < 0)
 	{
 	  mutt_error _("Argument must be a message number.");
 	  break;
@@ -1071,8 +1095,9 @@ int mutt_index_menu (void)
                  Prompt when trying to quit Mutt while there are backgrounded
                  compose sessions in process.
               */
-              mutt_yesorno (_("There are $background_edit sessions. Really quit Mutt?"),
-                            MUTT_NO) == MUTT_NO)
+              mutt_query_boolean (OPTBACKGROUNDCONFIRMQUIT,
+                  _("There are $background_edit sessions. Really quit Mutt?"),
+                  MUTT_NO) != MUTT_YES)
           {
             break;
           }
@@ -1446,6 +1471,7 @@ int mutt_index_menu (void)
         break;
       }
 
+      case OP_GENERIC_SELECT_ENTRY:
       case OP_DISPLAY_MESSAGE:
       case OP_DISPLAY_HEADERS: /* don't weed the headers */
 
@@ -1499,8 +1525,9 @@ int mutt_index_menu (void)
 	{
           if (mutt_background_has_backgrounded () &&
               option (OPTBACKGROUNDCONFIRMQUIT) &&
-              mutt_yesorno (_("There are $background_edit sessions. Really quit Mutt?"),
-                            MUTT_NO) == MUTT_NO)
+              mutt_query_boolean (OPTBACKGROUNDCONFIRMQUIT,
+                  _("There are $background_edit sessions. Really quit Mutt?"),
+                  MUTT_NO) != MUTT_YES)
           {
             break;
           }
@@ -1702,34 +1729,47 @@ int mutt_index_menu (void)
       case OP_SAVE:
       case OP_DECODE_COPY:
       case OP_DECODE_SAVE:
+      {
+        int rc;
+
 	CHECK_MSGCOUNT;
         CHECK_VISIBLE;
-        if (mutt_save_message (tag ? NULL : CURHDR,
-			       (op == OP_DECRYPT_SAVE) ||
-			       (op == OP_SAVE) || (op == OP_DECODE_SAVE),
-			       (op == OP_DECODE_SAVE) || (op == OP_DECODE_COPY),
-			       (op == OP_DECRYPT_SAVE) || (op == OP_DECRYPT_COPY) ||
-			       0) == 0 &&
-            (op == OP_SAVE || op == OP_DECODE_SAVE || op == OP_DECRYPT_SAVE)
-          )
-	{
-          menu->redraw |= REDRAW_STATUS;
+        rc = mutt_save_message (tag ? NULL : CURHDR,
+                                (op == OP_DECRYPT_SAVE) ||
+                                (op == OP_SAVE) || (op == OP_DECODE_SAVE),
+                                (op == OP_DECODE_SAVE) || (op == OP_DECODE_COPY),
+                                (op == OP_DECRYPT_SAVE) || (op == OP_DECRYPT_COPY) ||
+                                0);
+        /* These update status and delete flags, so require a redraw. */
+        if (op == OP_SAVE || op == OP_DECODE_SAVE || op == OP_DECRYPT_SAVE)
+        {
+          /* tagged operation could abort in the middle.  need to make sure
+           * affected messages are still redrawn */
 	  if (tag)
+          {
+            menu->redraw |= REDRAW_STATUS;
 	    menu->redraw |= REDRAW_INDEX;
-	  else if (option (OPTRESOLVE))
-	  {
-	    if ((menu->current = ci_next_undeleted (menu->current)) == -1)
-	    {
-	      menu->current = menu->oldcurrent;
-	      menu->redraw |= REDRAW_CURRENT;
-	    }
-	    else
-	      menu->redraw |= REDRAW_MOTION_RESYNCH;
-	  }
-	  else
-	    menu->redraw |= REDRAW_CURRENT;
-	}
-	break;
+          }
+
+          if (rc == 0 && !tag)
+          {
+            menu->redraw |= REDRAW_STATUS;
+            if (option (OPTRESOLVE))
+            {
+              if ((menu->current = ci_next_undeleted (menu->current)) == -1)
+              {
+                menu->current = menu->oldcurrent;
+                menu->redraw |= REDRAW_CURRENT;
+              }
+              else
+                menu->redraw |= REDRAW_MOTION_RESYNCH;
+            }
+            else
+              menu->redraw |= REDRAW_CURRENT;
+          }
+        }
+ 	break;
+      }
 
       case OP_MAIN_NEXT_NEW:
       case OP_MAIN_NEXT_UNREAD:
@@ -2031,6 +2071,11 @@ int mutt_index_menu (void)
 
 	if (CURHDR->collapsed)
 	{
+          /* Note this returns the *old* virtual index of the root message.
+           *
+           * For sort=reverse-threads this trick allows uncollapsing a
+           * single thread to position on the first (not root) message
+           * in the thread */
 	  menu->current = mutt_uncollapse_thread (Context, CURHDR);
 	  mutt_set_virtual (Context);
 	  if (option (OPTUNCOLLAPSEJUMP))
@@ -2038,8 +2083,22 @@ int mutt_index_menu (void)
 	}
 	else if (option (OPTCOLLAPSEUNREAD) || !UNREAD (CURHDR))
 	{
-	  menu->current = mutt_collapse_thread (Context, CURHDR);
+	  HEADER *base;
+	  int final;
+          /* This also returns the *old* virtual index of the root, but now
+           * we have to find the new position of the root, which isn't
+           * the same for sort=reverse-threads. */
+          final = mutt_collapse_thread (Context, CURHDR);
+	  base = Context->hdrs[Context->v2r[final]];
 	  mutt_set_virtual (Context);
+	  for (j = 0; j < Context->vcount; j++)
+	  {
+	    if (Context->hdrs[Context->v2r[j]]->index == base->index)
+	    {
+	      menu->current = j;
+	      break;
+	    }
+	  }
 	}
 	else
 	{
@@ -2283,7 +2342,8 @@ int mutt_index_menu (void)
       case OP_MAIL:
 
 	CHECK_ATTACH;
-        mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, Context, NULL);
+        mutt_send_message (SENDBACKGROUNDEDIT | SENDCHECKPOSTPONED, NULL, NULL,
+                           Context, NULL);
 	menu->redraw = REDRAW_FULL;
 	break;
 
@@ -2475,6 +2535,12 @@ int mutt_index_menu (void)
 	break;
       }
 
+      case OP_LIST_ACTION:
+
+        mutt_list_menu (Context, CURHDR);
+        menu->redraw = REDRAW_FULL;
+        break;
+
       case OP_SHELL_ESCAPE:
 
 	mutt_shell_escape ();
@@ -2615,9 +2681,10 @@ int mutt_index_menu (void)
         break;
 #endif
 
-      default:
+      case OP_NULL:
 	if (!in_pager)
 	  km_error_key (MENU_MAIN);
+        break;
     }
 
     if (in_pager)
@@ -2637,7 +2704,7 @@ int mutt_index_menu (void)
 
 void mutt_set_header_color (CONTEXT *ctx, HEADER *curhdr)
 {
-  COLOR_LINE *color;
+  COLOR_LINE *color_line;
   pattern_cache_t cache;
 
   if (!curhdr)
@@ -2645,12 +2712,12 @@ void mutt_set_header_color (CONTEXT *ctx, HEADER *curhdr)
 
   memset (&cache, 0, sizeof (cache));
 
-  for (color = ColorIndexList; color; color = color->next)
-    if (mutt_pattern_exec (color->color_pattern, MUTT_MATCH_FULL_ADDRESS, ctx, curhdr,
-                           &cache))
+  for (color_line = ColorIndexList; color_line; color_line = color_line->next)
+    if (mutt_pattern_exec (color_line->color_pattern, MUTT_MATCH_FULL_ADDRESS,
+                           ctx, curhdr, &cache))
     {
-      curhdr->pair = color->pair;
+      curhdr->color = color_line->color;
       return;
     }
-  curhdr->pair = ColorDefs[MT_COLOR_NORMAL];
+  curhdr->color = ColorDefs[MT_COLOR_NORMAL];
 }

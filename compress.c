@@ -402,7 +402,7 @@ execute_command (CONTEXT *ctx, const char *command, const char *progress)
     mutt_message (progress, ctx->realpath);
 
   mutt_block_signals();
-  endwin();
+  mutt_endwin (NULL);
   fflush (stdout);
 
   expand_command_str (ctx, command, sys_cmd, sizeof (sys_cmd));
@@ -691,7 +691,7 @@ check_mailbox (CONTEXT *ctx, int *index_hint)
  * open_message - Delegated to mbox handler
  */
 static int
-open_message (CONTEXT *ctx,  MESSAGE *msg, int msgno)
+open_message (CONTEXT *ctx,  MESSAGE *msg, int msgno, int headers)
 {
   if (!ctx)
     return -1;
@@ -705,7 +705,7 @@ open_message (CONTEXT *ctx,  MESSAGE *msg, int msgno)
     return -1;
 
   /* Delegate */
-  return ops->open_msg (ctx, msg, msgno);
+  return ops->open_msg (ctx, msg, msgno, headers);
 }
 
 /**

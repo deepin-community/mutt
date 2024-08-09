@@ -46,13 +46,14 @@
 #define DTYPE(x) ((x) & DT_MASK)
 
 /* subtypes */
-#define DT_SUBTYPE_MASK	0xff0
-#define DT_SORT_ALIAS	0x10
-#define DT_SORT_BROWSER 0x20
-#define DT_SORT_KEYS	0x40
-#define DT_SORT_AUX	0x80
-#define DT_SORT_SIDEBAR	0x100
-#define DT_L10N_STR     0x200
+#define DT_SUBTYPE_MASK       0xff0
+#define DT_SORT_ALIAS         0x10
+#define DT_SORT_BROWSER       0x20
+#define DT_SORT_KEYS          0x40
+#define DT_SORT_AUX           0x80
+#define DT_SORT_SIDEBAR       0x100
+#define DT_L10N_STR           0x200
+#define DT_SORT_THREAD_GROUPS 0x400
 
 /* flags to parse_set() */
 #define MUTT_SET_INV	(1<<0)	/* default is to invert all vars */
@@ -87,6 +88,105 @@ struct option_t
 #ifndef ISPELL
 #define ISPELL "ispell"
 #endif
+
+/* Sort Maps:
+ * Value-to-name lookup uses the first match.  They are sorted by value
+ * to make the duplicate values more obvious. */
+
+/*+sort+*/
+const struct mapping_t SortMethods[] = {  /* DT_SORT */
+  { "date",		SORT_DATE },
+  { "date-sent",	SORT_DATE },
+  { "from",		SORT_FROM },
+  { "label",		SORT_LABEL },
+  { "mailbox-order",	SORT_ORDER },
+  { "date-received",	SORT_RECEIVED },
+  { "score",		SORT_SCORE },
+  { "size",		SORT_SIZE },
+  { "spam",		SORT_SPAM },
+  { "subject",		SORT_SUBJECT },
+  { "threads",		SORT_THREADS },
+  { "to",		SORT_TO },
+  { NULL,               0 }
+};
+
+/* same as SortMethods, but with "threads" replaced by "date" */
+
+const struct mapping_t SortAuxMethods[] = {  /* DT_SORT_AUX */
+  { "date",		SORT_DATE },
+  { "date-sent",	SORT_DATE },
+  { "threads",		SORT_DATE },	/* note: sort_aux == threads
+					 * isn't possible.
+					 */
+  { "from",		SORT_FROM },
+  { "label",		SORT_LABEL },
+  { "mailbox-order",	SORT_ORDER },
+  { "date-received",	SORT_RECEIVED },
+  { "score",		SORT_SCORE },
+  { "size",		SORT_SIZE },
+  { "spam",		SORT_SPAM },
+  { "subject",		SORT_SUBJECT },
+  { "to",		SORT_TO },
+  { NULL,               0 }
+};
+
+/* Used by $sort_thread_groups.  "aux" delegates to $sort_aux */
+const struct mapping_t SortThreadGroupsMethods[] = {  /* DT_SORT_THREAD_GROUPS */
+  { "aux",		SORT_AUX },
+  { "date",		SORT_DATE },
+  { "date-sent",	SORT_DATE },
+  { "from",		SORT_FROM },
+  { "label",		SORT_LABEL },
+  { "mailbox-order",	SORT_ORDER },
+  { "date-received",	SORT_RECEIVED },
+  { "score",		SORT_SCORE },
+  { "size",		SORT_SIZE },
+  { "spam",		SORT_SPAM },
+  { "subject",		SORT_SUBJECT },
+  { "threads",		SORT_THREADS },
+  { "to",		SORT_TO },
+  { NULL,               0 }
+};
+
+const struct mapping_t SortBrowserMethods[] = {  /* DT_SORT_BROWSER */
+  { "count",	SORT_COUNT },
+  { "date",	SORT_DATE },
+  { "unsorted",	SORT_ORDER },
+  { "size",	SORT_SIZE },
+  { "alpha",	SORT_SUBJECT },
+  { "unread",	SORT_UNREAD },
+  { NULL,       0 }
+};
+
+const struct mapping_t SortAliasMethods[] = {  /* DT_SORT_ALIAS */
+  { "address",	SORT_ADDRESS },
+  { "alias",	SORT_ALIAS },
+  { "unsorted", SORT_ORDER },
+  { NULL,       0 }
+};
+
+const struct mapping_t SortKeyMethods[] = {  /* DT_SORT_KEYS */
+  { "address",	SORT_ADDRESS },
+  { "date",	SORT_DATE },
+  { "keyid",	SORT_KEYID },
+  { "trust",	SORT_TRUST },
+  { NULL,       0 }
+};
+
+const struct mapping_t SortSidebarMethods[] = {  /* DT_SORT_SIDEBAR */
+  { "count",		SORT_COUNT },
+  { "flagged",		SORT_FLAGGED },
+  { "unsorted",		SORT_ORDER },
+  { "mailbox-order",	SORT_ORDER },
+  { "path",		SORT_PATH },
+  { "alpha",		SORT_SUBJECT },
+  { "name",		SORT_SUBJECT },
+  { "unread",		SORT_UNREAD },
+  { "new",		SORT_UNREAD },  /* kept for compatibility */
+  { NULL,		0 }
+};
+/*-sort-*/
+
 
 struct option_t MuttVars[] = {
   /*++*/
@@ -267,6 +367,14 @@ struct option_t MuttVars[] = {
   ** .de
   ** .pp
   ** For an explanation of ``soft-fill'', see the $$index_format documentation.
+  */
+  { "attach_save_charset_convert", DT_QUAD, R_NONE, {.l=OPT_ATTACH_SAVE_CHARCONV}, {.l=MUTT_ASKYES} },
+  /*
+  ** .pp
+  ** When saving received text-type attachments, this quadoption
+  ** prompts to convert the character set if the encoding of the
+  ** attachment (or $$assumed_charset if none is specified) differs
+  ** from $charset.
   */
   { "attach_save_dir",	DT_PATH, R_NONE, {.p=&AttachSaveDir}, {.p=0} },
   /*
@@ -503,7 +611,8 @@ struct option_t MuttVars[] = {
   ** .ts
   ** set certificate_file=~/.mutt/certificates
   ** .te
-  **
+  ** .pp
+  ** (OpenSSL and GnuTLS only)
   */
 #endif
   { "change_folder_next", DT_BOOL, R_NONE, {.l=OPTCHANGEFOLDERNEXT}, {.l=0} },
@@ -558,6 +667,18 @@ struct option_t MuttVars[] = {
   ** .pp
   ** When \fIunset\fP, Mutt will not collapse a thread if it contains any
   ** unread messages.
+  */
+  { "compose_confirm_detach_first", DT_BOOL, R_NONE, {.l=OPTCOMPOSECONFIRMDETACH}, {.l=1} },
+  /*
+  ** .pp
+  ** When \fIset\fP, Mutt will prompt for confirmation when trying to
+  ** use \fC<detach-file>\fP on the first entry in the compose menu.
+  ** This is to help prevent irreversible loss of the typed message by
+  ** accidentally hitting 'D' in the menu.
+  ** .pp
+  ** Note: Mutt only prompts for the first entry.  It doesn't keep
+  ** track of which message is the typed message if the entries are
+  ** reordered, or if the first entry was already deleted.
   */
   /* L10N:
      $compose_format default value
@@ -907,6 +1028,9 @@ struct option_t MuttVars[] = {
   ** synchronizing a mailbox.  If set to \fIyes\fP, messages marked for
   ** deleting will automatically be purged without prompting.  If set to
   ** \fIno\fP, messages marked for deletion will be kept in the mailbox.
+  ** .pp
+  ** This option is ignored for maildir-style mailboxes when $$maildir_trash
+  ** is set.
   */
   { "delete_untag",	DT_BOOL, R_NONE, {.l=OPTDELETEUNTAG}, {.l=1} },
   /*
@@ -1034,7 +1158,7 @@ struct option_t MuttVars[] = {
   /*
   ** .pp
   ** The file which includes random data that is used to initialize SSL
-  ** library functions.
+  ** library functions. (OpenSSL only)
   */
 #endif
   { "envelope_from_address", DT_ADDR, R_NONE, {.p=&EnvFrom}, {.p=0} },
@@ -1071,6 +1195,8 @@ struct option_t MuttVars[] = {
   ** .pp
   ** This variable controls whether or not attachments on outgoing messages
   ** are saved along with the main body of your message.
+  ** .pp
+  ** Note: $$fcc_before_send forces the default (set) behavior of this option.
   */
   { "fcc_before_send",	DT_BOOL, R_NONE, {.l=OPTFCCBEFORESEND}, {.l=0} },
   /*
@@ -1092,7 +1218,11 @@ struct option_t MuttVars[] = {
   ** When this variable is \fIset\fP, FCCs will be stored unencrypted and
   ** unsigned, even when the actual message is encrypted and/or
   ** signed.
+  ** .pp
+  ** Note: $$fcc_before_send forces the default (unset) behavior of this option.
   ** (PGP only)
+  ** .pp
+  ** See also $$pgp_self_encrypt, $$smime_self_encrypt.
   */
   { "fcc_delimiter", DT_STR, R_NONE, {.p=&FccDelimiter}, {.p=0} },
   /*
@@ -1225,14 +1355,17 @@ struct option_t MuttVars[] = {
   { "forw_decode",	DT_SYN,  R_NONE, {.p="forward_decode"}, {.p=0} },
   /*
   */
-  { "forward_decrypt",	DT_BOOL, R_NONE, {.l=OPTFORWDECRYPT}, {.l=1} },
+  { "forward_decrypt",	DT_QUAD, R_NONE, {.l=OPT_FORWDECRYPT}, {.l=MUTT_YES} },
   /*
   ** .pp
-  ** Controls the handling of encrypted messages when forwarding a message.
-  ** When \fIset\fP, the outer layer of encryption is stripped off.  This
-  ** variable is only used if $$mime_forward is \fIset\fP and
-  ** $$mime_forward_decode is \fIunset\fP.
-  ** (PGP only)
+  ** This quadoption controls the handling of encrypted messages when
+  ** forwarding or attaching a message.  When set to or answered
+  ** ``yes'', the outer layer of encryption is stripped off.
+  ** .pp
+  ** This variable is used if $$mime_forward is \fIset\fP and
+  ** $$mime_forward_decode is \fIunset\fP.  It is also used when
+  ** attaching a message via \fC<attach-message>\fP in the compose
+  ** menu.  (PGP only)
   */
   { "forw_decrypt",	DT_SYN,  R_NONE, {.p="forward_decrypt"}, {.p=0} },
   /*
@@ -1313,12 +1446,13 @@ struct option_t MuttVars[] = {
   ** If pointing to a directory Mutt will contain a header cache
   ** database file per folder, if pointing to a file that file will
   ** be a single global header cache. By default it is \fIunset\fP so no header
-  ** caching will be used.
+  ** caching will be used.  If pointing to a directory, it must be
+  ** created in advance.
   ** .pp
   ** Header caching can greatly improve speed when opening POP, IMAP
   ** MH or Maildir folders, see ``$caching'' for details.
   */
-#if defined(HAVE_QDBM) || defined(HAVE_TC) || defined(HAVE_KC)
+# if defined(HAVE_QDBM) || defined(HAVE_TC) || defined(HAVE_KC)
   { "header_cache_compress", DT_BOOL, R_NONE, {.l=OPTHCACHECOMPRESS}, {.l=1} },
   /*
   ** .pp
@@ -1329,8 +1463,8 @@ struct option_t MuttVars[] = {
   ** slower opening of cached folder(s) which in general is still
   ** much faster than opening non header cached folders.
   */
-#endif /* HAVE_QDBM */
-#if defined(HAVE_GDBM) || defined(HAVE_DB4)
+# endif /* HAVE_QDBM */
+# if defined(HAVE_GDBM) || defined(HAVE_DB4)
   { "header_cache_pagesize", DT_LNUM, R_NONE, {.p=&HeaderCachePageSize}, {.l=16384} },
   /*
   ** .pp
@@ -1339,7 +1473,7 @@ struct option_t MuttVars[] = {
   ** values can waste space, memory, or CPU time. The default should be more
   ** or less optimal for most use cases.
   */
-#endif /* HAVE_GDBM || HAVE_DB4 */
+# endif /* HAVE_GDBM || HAVE_DB4 */
 #endif /* USE_HCACHE */
   { "header_color_partial", DT_BOOL, R_PAGER_FLOW, {.l=OPTHEADERCOLORPARTIAL}, {.l=0} },
   /*
@@ -1864,6 +1998,13 @@ struct option_t MuttVars[] = {
   ** from your spool mailbox to your $$mbox mailbox, or as a result of
   ** a ``$mbox-hook'' command.
   */
+  { "local_date_header", DT_BOOL, R_NONE, {.l=OPTLOCALDATEHEADER}, {.l=1} },
+  /*
+  ** .pp
+  ** If \fIset\fP, the date in the Date header of emails that you send will be in
+  ** your local timezone. If unset a UTC date will be used instead to avoid
+  ** leaking information about your current location.
+  */
   { "mail_check",	DT_NUM,  R_NONE, {.p=&BuffyTimeout}, {.l=5} },
   /*
   ** .pp
@@ -1877,19 +2018,19 @@ struct option_t MuttVars[] = {
   ** since the last time you opened the mailbox.  When \fIunset\fP, Mutt will notify you
   ** if any new mail exists in the mailbox, regardless of whether you have visited it
   ** recently.
-  ** .pp
-  ** When \fI$$mark_old\fP is set, Mutt does not consider the mailbox to contain new
-  ** mail if only old messages exist.
   */
   { "mail_check_stats", DT_BOOL, R_NONE, {.l=OPTMAILCHECKSTATS}, {.l=0} },
   /*
   ** .pp
   ** When \fIset\fP, mutt will periodically calculate message
   ** statistics of a mailbox while polling for new mail.  It will
-  ** check for unread, flagged, and total message counts.  Because
-  ** this operation is more performance intensive, it defaults to
-  ** \fIunset\fP, and has a separate option, $$mail_check_stats_interval, to
-  ** control how often to update these counts.
+  ** check for unread, flagged, and total message counts.
+  ** (Note: IMAP mailboxes only support unread and total counts).
+  ** .pp
+  ** Because this operation is more performance intensive, it defaults
+  ** to \fIunset\fP, and has a separate option,
+  ** $$mail_check_stats_interval, to control how often to update these
+  ** counts.
   ** .pp
   ** Message statistics can also be explicitly calculated by invoking the
   ** \fC<check-stats>\fP
@@ -1928,7 +2069,7 @@ struct option_t MuttVars[] = {
   ** folders).
   */
 #endif
-  { "maildir_trash", DT_BOOL, R_NONE, {.l=OPTMAILDIRTRASH}, {.l=0} },
+  { "maildir_trash", DT_BOOL, R_BOTH, {.l=OPTMAILDIRTRASH}, {.l=0} },
   /*
   ** .pp
   ** If \fIset\fP, messages marked as deleted will be saved with the maildir
@@ -2046,6 +2187,41 @@ struct option_t MuttVars[] = {
   { "msg_format",	DT_SYN,  R_NONE, {.p="message_format"}, {.p=0} },
   /*
   */
+  { "message_id_format", DT_STR, R_NONE, {.p=&MessageIdFormat}, {.p="<%z@%f>"} },
+  /*
+  ** .pp
+  ** This variable describes the format of the Message-ID generated
+  ** when sending messages.  Mutt 2.0 introduced a more compact
+  ** format, but this variable allows the ability to choose your own
+  ** format.  The value may end in ``|'' to invoke an external filter.
+  ** See $formatstrings-filters.
+  ** .pp
+  ** Please note that the Message-ID value follows a strict syntax,
+  ** and you are responsible for ensuring correctness if you change
+  ** this from the default.  In particular, the value must follow the
+  ** syntax in RFC 5322: ``\fC"<" id-left "@" id-right ">"\fP''.  No
+  ** spaces are allowed, and \fCid-left\fP should follow the
+  ** dot-atom-text syntax in the RFC.  The \fCid-right\fP should
+  ** generally be left at %f.
+  ** .pp
+  ** The old Message-ID format can be used by setting this to:
+  ** ``\fC<%Y%02m%02d%02H%02M%02S.G%c%p@%f>\fP''
+  ** .pp
+  ** The following \fCprintf(3)\fP-style sequences are understood:
+  ** .dl
+  ** .dt %c .dd step counter looping from ``A'' to ``Z''
+  ** .dt %d .dd current day of the month (GMT)
+  ** .dt %f .dd $$hostname
+  ** .dt %H .dd current hour using a 24-hour clock (GMT)
+  ** .dt %m .dd current month number (GMT)
+  ** .dt %M .dd current minute of the hour (GMT)
+  ** .dt %p .dd pid of the running mutt process
+  ** .dt %r .dd 3 bytes of pseudorandom data encoded in Base64
+  ** .dt %S .dd current second of the minute (GMT)
+  ** .dt %x .dd 1 byte of pseudorandom data hex encoded (example: '1b')
+  ** .dt %Y .dd current year using 4 digits (GMT)
+  ** .dt %z .dd 4 byte timestamp + 8 bytes of pseudorandom data encoded in Base64
+  */
   { "meta_key",		DT_BOOL, R_NONE, {.l=OPTMETAKEY}, {.l=0} },
   /*
   ** .pp
@@ -2157,6 +2333,8 @@ struct option_t MuttVars[] = {
   ** .dt %s .dd The remailer's short name.
   ** .dt %a .dd The remailer's e-mail address.
   ** .de
+  ** .pp
+  ** (Mixmaster only)
   */
   { "mixmaster",	DT_CMD_PATH, R_NONE, {.p=&Mixmaster}, {.p=MIXMASTER} },
   /*
@@ -2164,7 +2342,7 @@ struct option_t MuttVars[] = {
   ** This variable contains the path to the Mixmaster binary on your
   ** system.  It is used with various sets of parameters to gather the
   ** list of known remailers, and to finally send a message through the
-  ** mixmaster chain.
+  ** mixmaster chain. (Mixmaster only)
   */
 #endif
   { "move",		DT_QUAD, R_NONE, {.l=OPT_MOVE}, {.l=MUTT_NO} },
@@ -2212,6 +2390,13 @@ struct option_t MuttVars[] = {
   ** variable should specify the pathname of the external pager you would
   ** like to use.
   ** .pp
+  ** The string may contain a ``%s'', which will be substituted with
+  ** the generated message filename.  Mutt will add quotes around the
+  ** string substituted for ``%s'' automatically according to shell
+  ** quoting rules, so you should avoid adding your own.  If no ``%s''
+  ** is found in the string, Mutt will append the message filename to
+  ** the end of the string.
+  ** .pp
   ** Using an external pager may have some disadvantages: Additional
   ** keystrokes are necessary because you can't call mutt functions
   ** directly from the pager, and screen resizes cause lines longer than
@@ -2254,6 +2439,15 @@ struct option_t MuttVars[] = {
   ** no index being shown.  If the number of messages in the current folder
   ** is less than $$pager_index_lines, then the index will only use as
   ** many lines as it needs.
+  */
+  { "pager_skip_quoted_context", DT_NUM, R_NONE, {.p=&PagerSkipQuotedContext}, {.l=0} },
+  /*
+  ** .pp
+  ** Determines the number of lines of context to show before the
+  ** unquoted text when using \fC$<skip-quoted>\fP. When set to a
+  ** positive number at most that many lines of the previous quote are
+  ** displayed. If the previous quote is shorter the whole quote is
+  ** displayed.
   */
   { "pager_stop",	DT_BOOL, R_NONE, {.l=OPTPAGERSTOP}, {.l=0} },
   /*
@@ -3071,12 +3265,62 @@ struct option_t MuttVars[] = {
   ** .pp
   ** Also see $$wrap.
   */
-  { "reply_regexp",	DT_RX,	 R_INDEX|R_RESORT, {.p=&ReplyRegexp}, {.p="^(re([\\[0-9\\]+])*|aw):[ \t]*"} },
+  /* L10N:
+     $reply_regexp default value.
+
+     This is a regular expression that matches reply subject lines.
+     By default, it only matches an initial "Re: ", which is the
+     standardized Latin prefix.
+
+     However, many locales have other prefixes that are commonly used
+     too, such as Aw in Germany.  To add other prefixes, modify the first
+     parenthesized expression, such as:
+        "^(re|aw)
+     you can add multiple values, for example:
+        "^(re|aw|se)
+
+     Important:
+     - Use all lower case letters.
+     - Don't remove the 're' prefix from the list of choices.
+     - Please test the value you use inside Mutt.  A mistake here
+       will break Mutt's threading behavior.  Note: the header cache
+       can interfere with testing, so be sure to test with $header_cache
+       unset.
+  */
+  { "reply_regexp",	DT_RX|DT_L10N_STR, R_INDEX|R_RESORT|R_RESORT_INIT, {.p=&ReplyRegexp}, {.p=N_("^(re)(\\[[0-9]+\\])*:[ \t]*")} },
   /*
   ** .pp
-  ** A regular expression used to recognize reply messages when threading
-  ** and replying. The default value corresponds to the English "Re:" and
-  ** the German "Aw:".
+  ** A regular expression used to recognize reply messages when
+  ** threading and replying. The default value corresponds to the
+  ** standard Latin "Re:" prefix.
+  ** .pp
+  ** This value may have been localized by the translator for your
+  ** locale, adding other prefixes that are common in the locale. You
+  ** can add your own prefixes by appending inside \fC"^(re)"\fP.  For
+  ** example: \fC"^(re|se)"\fP or \fC"^(re|aw|se)"\fP.
+  ** .pp
+  ** The second parenthesized expression matches zero or more
+  ** bracketed numbers following the prefix, such as \fC"Re[1]: "\fP.
+  ** The initial \fC"\\["\fP means a literal left-bracket character.
+  ** Note the backslash must be doubled when used inside a double
+  ** quoted string in the muttrc.  \fC"[0-9]+"\fP means one or more
+  ** numbers.  \fC"\\]"\fP means a literal right-bracket.  Finally the
+  ** whole parenthesized expression has a \fC"*"\fP suffix, meaning it
+  ** can occur zero or more times.
+  ** .pp
+  ** The last part matches a colon followed by an optional space or
+  ** tab.  Note \fC"\t"\fP is converted to a literal tab inside a
+  ** double quoted string.  If you use a single quoted string, you
+  ** would have to type an actual tab character, and would need to
+  ** convert the double-backslashes to single backslashes.
+  ** .pp
+  ** Note: the result of this regexp match against the subject is
+  ** stored in the header cache.  Mutt isn't smart enough to
+  ** invalidate a header cache entry based on changing $$reply_regexp,
+  ** so if you aren't seeing correct values in the index, try
+  ** temporarily turning off the header cache.  If that fixes the
+  ** problem, then once the variable is set to your liking, remove
+  ** your stale header cache files and turn the header cache back on.
   */
   { "reply_self",	DT_BOOL, R_NONE, {.l=OPTREPLYSELF}, {.l=0} },
   /*
@@ -3178,7 +3422,7 @@ struct option_t MuttVars[] = {
   ** In either case, a missing real name will be filled in afterwards
   ** using the value of $$realname.
   */
-  { "rfc2047_parameters", DT_BOOL, R_NONE, {.l=OPTRFC2047PARAMS}, {.l=0} },
+  { "rfc2047_parameters", DT_BOOL, R_NONE, {.l=OPTRFC2047PARAMS}, {.l=1} },
   /*
   ** .pp
   ** When this variable is \fIset\fP, Mutt will decode RFC2047-encoded MIME
@@ -3315,6 +3559,13 @@ struct option_t MuttVars[] = {
   ** adding a \fC--\fP delimiter (if not already present).  Additional
   ** flags, such as for $$use_8bitmime, $$use_envelope_from,
   ** $$dsn_notify, or $$dsn_return will be added before the delimiter.
+  ** .pp
+  ** \fBNote:\fP This command is invoked differently from most other
+  ** commands in Mutt.  It is tokenized by space, and invoked directly
+  ** via \fCexecvp(3)\fP with an array of arguments - so commands or
+  ** arguments with spaces in them are not supported.  The shell is
+  ** not used to run the command, so shell quoting is also not
+  ** supported.
   ** .pp
   ** \fBSee also:\fP $$write_bcc.
   */
@@ -3916,6 +4167,15 @@ struct option_t MuttVars[] = {
   ** .pp
   ** You may optionally use the ``reverse-'' prefix to specify reverse sorting
   ** order (example: ``\fCset sort=reverse-date-sent\fP'').
+  ** .pp
+  ** For values except ``threads'', this provides the primary sort
+  ** method.  When two message sort values are equal, $$sort_aux will
+  ** be used for a secondary sort.
+  ** .pp
+  ** When set to ``threads'', Mutt threads messages in the index. It
+  ** uses the variable $$sort_thread_groups to sort between threads
+  ** (at the top/root level), and $$sort_aux to sort sub-threads and
+  ** children.
   */
   { "sort_alias",	DT_SORT|DT_SORT_ALIAS,	R_NONE,	{.p=&SortAlias}, {.l=SORT_ALIAS} },
   /*
@@ -3931,30 +4191,30 @@ struct option_t MuttVars[] = {
   { "sort_aux",		DT_SORT|DT_SORT_AUX, R_INDEX|R_RESORT_BOTH, {.p=&SortAux}, {.l=SORT_DATE} },
   /*
   ** .pp
-  ** This provides a secondary sort for messages in the ``index'' menu, used
-  ** when the $$sort value is equal for two messages.
+  ** For non-threaded mode, this provides a secondary sort for
+  ** messages in the ``index'' menu, used when the $$sort value is
+  ** equal for two messages.
   ** .pp
-  ** When sorting by threads, this variable controls how threads are sorted
-  ** in relation to other threads, and how the branches of the thread trees
-  ** are sorted.  This can be set to any value that $$sort can, except
-  ** ``threads'' (in that case, mutt will just use ``date-sent'').  You can also
-  ** specify the ``last-'' prefix in addition to the ``reverse-'' prefix, but ``last-''
-  ** must come after ``reverse-''.  The ``last-'' prefix causes messages to be
-  ** sorted against its siblings by which has the last descendant, using
-  ** the rest of $$sort_aux as an ordering.  For instance,
+  ** When sorting by threads, this variable controls how the branches
+  ** of the thread trees are sorted.  This can be set to any value
+  ** that $$sort can, except ``threads'' (in that case, mutt will just
+  ** use ``date-sent'').  You can also specify the ``last-'' prefix in
+  ** addition to the ``reverse-'' prefix, but ``last-'' must come
+  ** after ``reverse-''.  The ``last-'' prefix causes messages to be
+  ** sorted against its siblings by which has the last descendant,
+  ** using the rest of $$sort_aux as an ordering.  For instance,
   ** .ts
   ** set sort_aux=last-date-received
   ** .te
   ** .pp
-  ** would mean that if a new message is received in a
-  ** thread, that thread becomes the last one displayed (or the first, if
-  ** you have ``\fCset sort=reverse-threads\fP''.)
+  ** would mean that if a new message is received in a sub-thread,
+  ** that sub-thread becomes the last one displayed.
   ** .pp
   ** Note: For reversed-threads $$sort
   ** order, $$sort_aux is reversed again (which is not the right thing to do,
   ** but kept to not break any existing configuration setting).
   */
-  { "sort_browser",	DT_SORT|DT_SORT_BROWSER, R_NONE, {.p=&BrowserSort}, {.l=SORT_ALPHA} },
+  { "sort_browser",	DT_SORT|DT_SORT_BROWSER, R_NONE, {.p=&BrowserSort}, {.l=SORT_SUBJECT} },
   /*
   ** .pp
   ** Specifies how to sort entries in the file browser.  By default, the
@@ -3971,6 +4231,24 @@ struct option_t MuttVars[] = {
   ** You may optionally use the ``reverse-'' prefix to specify reverse sorting
   ** order (example: ``\fCset sort_browser=reverse-date\fP'').
   */
+  { "sort_browser_mailboxes", DT_SORT|DT_SORT_BROWSER, R_NONE, {.p=&BrowserSortMailboxes}, {.l=SORT_ORDER} },
+  /*
+  ** .pp
+  ** Specifies how to sort entries in the mailbox browser.  By default, the
+  ** entries are unsorted, displayed in the same order as listed
+  ** in the ``mailboxes'' command.  Valid values:
+  ** .il
+  ** .dd alpha (alphabetically)
+  ** .dd count
+  ** .dd date
+  ** .dd size
+  ** .dd unread
+  ** .dd unsorted
+  ** .ie
+  ** .pp
+  ** You may optionally use the ``reverse-'' prefix to specify reverse sorting
+  ** order (example: ``\fCset sort_browser_mailboxes=reverse-alpha\fP'').
+  */
   { "sort_re",		DT_BOOL, R_INDEX|R_RESORT|R_RESORT_INIT, {.l=OPTSORTRE}, {.l=1} },
   /*
   ** .pp
@@ -3982,6 +4260,27 @@ struct option_t MuttVars[] = {
   ** setting of $$reply_regexp.  With $$sort_re \fIunset\fP, mutt will attach
   ** the message whether or not this is the case, as long as the
   ** non-$$reply_regexp parts of both messages are identical.
+  */
+  { "sort_thread_groups", DT_SORT|DT_SORT_THREAD_GROUPS, R_INDEX|R_RESORT_BOTH, {.p=&SortThreadGroups}, {.l=SORT_AUX} },
+  /*
+  ** .pp
+  ** When sorting by threads, this variable controls how threads are
+  ** sorted in relation to other threads (at the top/root level).
+  ** This can be set to any value that $$sort can, except ``threads''.
+  ** You can also specify the ``last-'' prefix in addition to the
+  ** ``reverse-'' prefix, but ``last-'' must come after ``reverse-''.
+  ** The ``last-'' prefix causes messages to be sorted against its
+  ** siblings by which has the last descendant, using the rest of
+  ** $$sort_thread_groups as an ordering.
+  ** .pp
+  ** For backward compatibility, the default value is ``aux'', which
+  ** means to use $$sort_aux for top-level thread sorting too.  The
+  ** value ``aux'' does not respect ``last-'' or ``reverse-''
+  ** prefixes, it simply delegates sorting directly to $$sort_aux.
+  ** .pp
+  ** Note: For reversed-threads $$sort order, $$sort_thread_groups is
+  ** reversed again (which is not the right thing to do, but kept to
+  ** not break any existing configuration setting).
   */
   { "spam_separator",   DT_STR, R_NONE, {.p=&SpamSep}, {.p=","} },
   /*
@@ -4001,7 +4300,7 @@ struct option_t MuttVars[] = {
   ** variable \fC$$$MAIL\fP or \fC$$$MAILDIR\fP if either is defined.
   */
 #if defined(USE_SSL)
-#ifdef USE_SSL_GNUTLS
+# ifdef USE_SSL_GNUTLS
   { "ssl_ca_certificates_file", DT_PATH, R_NONE, {.p=&SslCACertFile}, {.p=0} },
   /*
   ** .pp
@@ -4014,7 +4313,7 @@ struct option_t MuttVars[] = {
   ** set ssl_ca_certificates_file=/etc/ssl/certs/ca-certificates.crt
   ** .te
   */
-#endif /* USE_SSL_GNUTLS */
+# endif /* USE_SSL_GNUTLS */
   { "ssl_client_cert", DT_PATH, R_NONE, {.p=&SslClientCert}, {.p=0} },
   /*
   ** .pp
@@ -4119,6 +4418,14 @@ struct option_t MuttVars[] = {
   ** URL. You should only unset this for particular known hosts, using
   ** the \fC$<account-hook>\fP function.
   */
+  { "ssl_verify_host_override", DT_STR, R_NONE, {.p=&SslVerifyHostOverride}, {.p=0} },
+  /*
+  ** .pp
+  ** Defines an alternate host name to verify the server certificate against.
+  ** This should not be set unless you are sure what you are doing, but it
+  ** might be useful for connection to a .onion host without a properly
+  ** configured host name in the certificate.  See $$ssl_verify_host.
+  */
 # ifdef USE_SSL_OPENSSL
 #  ifdef HAVE_SSL_PARTIAL_CHAIN
   { "ssl_verify_partial_chains", DT_BOOL, R_NONE, {.l=OPTSSLVERIFYPARTIAL}, {.l=0} },
@@ -4166,7 +4473,7 @@ struct option_t MuttVars[] = {
   /* L10N:
      $status_format default value
   */
-  { "status_format", DT_STR|DT_L10N_STR, R_BOTH, {.p=&Status}, {.p=N_("-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]---(%s/%S)-%>-(%P)---")} },
+  { "status_format", DT_STR|DT_L10N_STR, R_BOTH, {.p=&Status}, {.p=N_("-%r-Mutt: %f [Msgs:%?M?%M/?%m%?n? New:%n?%?o? Old:%o?%?d? Del:%d?%?F? Flag:%F?%?t? Tag:%t?%?p? Post:%p?%?b? Inc:%b?%?B? Back:%B?%?l? %l?]---(%s/%?T?%T/?%S)-%>-(%P)---")} },
   /*
   ** .pp
   ** Controls the format of the status line displayed in the ``index''
@@ -4194,6 +4501,7 @@ struct option_t MuttVars[] = {
   ** .dt %s  .dd current sorting mode ($$sort)
   ** .dt %S  .dd current aux sorting method ($$sort_aux)
   ** .dt %t  .dd number of tagged messages *
+  ** .dt %T  .dd current thread group sorting method ($$sort_thread_groups) *
   ** .dt %u  .dd number of unread messages *
   ** .dt %v  .dd Mutt version string
   ** .dt %V  .dd currently active limit pattern, if any *
@@ -4285,7 +4593,7 @@ struct option_t MuttVars[] = {
   { "thorough_search",	DT_BOOL, R_NONE, {.l=OPTTHOROUGHSRC}, {.l=1} },
   /*
   ** .pp
-  ** Affects the \fC~b\fP and \fC~h\fP search operations described in
+  ** Affects the \fC~b\fP, \fC~B\fP, and \fC~h\fP search operations described in
   ** section ``$patterns''.  If \fIset\fP, the headers and body/attachments of
   ** messages to be searched are decoded before searching. If \fIunset\fP,
   ** messages are searched as they appear in the folder.
@@ -4435,10 +4743,11 @@ struct option_t MuttVars[] = {
   { "uncollapse_new", 	DT_BOOL, R_NONE, {.l=OPTUNCOLLAPSENEW}, {.l=1} },
   /*
   ** .pp
-  ** When \fIset\fP, Mutt will automatically uncollapse any collapsed thread
-  ** that receives a new message. When \fIunset\fP, collapsed threads will
-  ** remain collapsed. the presence of the new message will still affect
-  ** index sorting, though.
+  ** When \fIset\fP, Mutt will automatically uncollapse any collapsed
+  ** thread that receives a newly delivered message.  When
+  ** \fIunset\fP, collapsed threads will remain collapsed. The
+  ** presence of the newly delivered message will still affect index
+  ** sorting, though.
   */
   { "use_8bitmime",	DT_BOOL, R_NONE, {.l=OPTUSE8BITMIME}, {.l=0} },
   /*
@@ -4526,7 +4835,7 @@ struct option_t MuttVars[] = {
   ** .pp
   ** Also see $$copy_decode_weed, $$pipe_decode_weed, $$print_decode_weed.
   */
-  { "wrap",             DT_NUM,  R_PAGER, {.p=&Wrap}, {.l=0} },
+  { "wrap",             DT_NUM,  R_PAGER_FLOW, {.p=&Wrap}, {.l=0} },
   /*
   ** .pp
   ** When set to a positive value, mutt will wrap text at $$wrap characters.
@@ -4555,7 +4864,7 @@ struct option_t MuttVars[] = {
   ** When \fIset\fP, searches will wrap around the first (or last) item. When
   ** \fIunset\fP, incremental searches will not wrap.
   */
-  { "wrapmargin",	DT_NUM,	 R_PAGER, {.p=&Wrap}, {.l=0} },
+  { "wrapmargin",	DT_NUM,	 R_PAGER_FLOW, {.p=&Wrap}, {.l=0} },
   /*
   ** .pp
   ** (DEPRECATED) Equivalent to setting $$wrap with a negative value.
@@ -4598,81 +4907,6 @@ struct option_t MuttVars[] = {
   */
   /*--*/
   { NULL, 0, 0, {.l=0}, {.l=0} }
-};
-
-const struct mapping_t SortMethods[] = {
-  { "date",		SORT_DATE },
-  { "date-sent",	SORT_DATE },
-  { "date-received",	SORT_RECEIVED },
-  { "mailbox-order",	SORT_ORDER },
-  { "subject",		SORT_SUBJECT },
-  { "from",		SORT_FROM },
-  { "size",		SORT_SIZE },
-  { "threads",		SORT_THREADS },
-  { "to",		SORT_TO },
-  { "score",		SORT_SCORE },
-  { "spam",		SORT_SPAM },
-  { "label",		SORT_LABEL },
-  { NULL,               0 }
-};
-
-/* same as SortMethods, but with "threads" replaced by "date" */
-
-const struct mapping_t SortAuxMethods[] = {
-  { "date",		SORT_DATE },
-  { "date-sent",	SORT_DATE },
-  { "date-received",	SORT_RECEIVED },
-  { "mailbox-order",	SORT_ORDER },
-  { "subject",		SORT_SUBJECT },
-  { "from",		SORT_FROM },
-  { "size",		SORT_SIZE },
-  { "threads",		SORT_DATE },	/* note: sort_aux == threads
-					 * isn't possible.
-					 */
-  { "to",		SORT_TO },
-  { "score",		SORT_SCORE },
-  { "spam",		SORT_SPAM },
-  { "label",		SORT_LABEL },
-  { NULL,               0 }
-};
-
-
-const struct mapping_t SortBrowserMethods[] = {
-  { "alpha",	SORT_SUBJECT },
-  { "count",	SORT_COUNT },
-  { "date",	SORT_DATE },
-  { "size",	SORT_SIZE },
-  { "unread",	SORT_UNREAD },
-  { "unsorted",	SORT_ORDER },
-  { NULL,       0 }
-};
-
-const struct mapping_t SortAliasMethods[] = {
-  { "alias",	SORT_ALIAS },
-  { "address",	SORT_ADDRESS },
-  { "unsorted", SORT_ORDER },
-  { NULL,       0 }
-};
-
-const struct mapping_t SortKeyMethods[] = {
-  { "address",	SORT_ADDRESS },
-  { "date",	SORT_DATE },
-  { "keyid",	SORT_KEYID },
-  { "trust",	SORT_TRUST },
-  { NULL,       0 }
-};
-
-const struct mapping_t SortSidebarMethods[] = {
-  { "alpha",		SORT_SUBJECT },
-  { "count",		SORT_COUNT },
-  { "flagged",		SORT_FLAGGED },
-  { "mailbox-order",	SORT_ORDER },
-  { "name",		SORT_SUBJECT },
-  { "new",		SORT_UNREAD },  /* kept for compatibility */
-  { "path",		SORT_PATH },
-  { "unread",		SORT_UNREAD },
-  { "unsorted",		SORT_ORDER },
-  { NULL,		0 }
 };
 
 

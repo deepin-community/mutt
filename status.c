@@ -62,6 +62,7 @@ static void _menu_status_line (char *buf, size_t buflen, size_t col, int cols, M
  * %s = current sorting method ($sort)
  * %S = current aux sorting method ($sort_aux)
  * %t = # of tagged messages [option]
+ * %T = current sort thread group method ($sort_thread_groups) [option]
  * %u = number of unread messages [option]
  * %v = Mutt version
  * %V = currently active limit pattern [option] */
@@ -237,11 +238,29 @@ status_format_str (char *buf, size_t buflen, size_t col, int cols, char op, cons
 
       if (Context)
       {
-	i = option(OPTATTACHMSG) ? 3 : ((Context->readonly ||
-          Context->dontwrite) ? 2 : (Context->changed ||
-          /* deleted doesn't necessarily mean changed in IMAP */
-          (Context->magic != MUTT_IMAP &&
-           Context->deleted)) ? 1 : 0);
+        if (option (OPTATTACHMSG))
+          i = 3;
+        else if (Context->readonly || Context->dontwrite)
+          i = 2;
+        else if (Context->changed)
+          i = 1;
+        else if (Context->magic == MUTT_MAILDIR &&
+                 option (OPTMAILDIRTRASH))
+        {
+          /* Undeleting a trashed message sets Context->changed.  (See
+           * _mutt_set_flag().)  So we can make this comparison to
+           * determine the modified flag.
+           */
+          if (Context->trashed != Context->deleted)
+            i = 1;
+          else
+            i = 0;
+        }
+        /* deleted doesn't necessarily mean changed in IMAP */
+        else if (Context->magic != MUTT_IMAP && Context->deleted)
+          i = 1;
+        else
+          i = 0;
       }
 
       if (!StChars || !StChars->len)
@@ -286,6 +305,18 @@ status_format_str (char *buf, size_t buflen, size_t col, int cols, char op, cons
 	snprintf (buf, buflen, fmt, Context ? Context->tagged : 0);
       }
       else if (!Context || !Context->tagged)
+	optional = 0;
+      break;
+
+    case 'T':
+      if (!optional)
+      {
+        snprintf (fmt, sizeof (fmt), "%%%ss", prefix);
+        snprintf (buf, buflen, fmt,
+                  get_sort_str (tmp, sizeof (tmp), SortThreadGroups));
+      }
+      else if ((Sort & SORT_MASK) != SORT_THREADS ||
+               (SortThreadGroups & SORT_MASK) == SORT_AUX)
 	optional = 0;
       break;
 

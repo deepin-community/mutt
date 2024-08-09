@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1996-2002,2010,2013 Michael R. Elkins <me@mutt.org>
  * Copyright (C) 2004 g10 Code GmbH
- * Copyright (C) 2018 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2018,2020 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -65,6 +65,15 @@ void mutt_buffer_clear (BUFFER *b)
   b->dptr = b->data;
   if (b->dptr)
     *(b->dptr) = '\0';
+}
+
+/* This is used for cases where the buffer is read from.
+ * A value is placed in the buffer, and then b->dptr is set back to the
+ * beginning as a read marker instead of write marker.
+ */
+void mutt_buffer_rewind (BUFFER *b)
+{
+  b->dptr = b->data;
 }
 
 /* Creates and initializes a BUFFER by copying the seed string. */

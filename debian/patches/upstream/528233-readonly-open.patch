@@ -8,26 +8,26 @@ his/her work (see upstream bug http://bugs.mutt.org/3261)
 
 Debian bugs: #528233, updated in #572203
 ---
- attach.c | 5 +++++
+ attach.c |    5 +++++
  1 file changed, 5 insertions(+)
 
 --- a/attach.c
 +++ b/attach.c
-@@ -387,6 +387,7 @@
+@@ -389,6 +389,7 @@
        }
        else
  	goto return_error;
-+      chmod (tempfile, 0400);
++      chmod (mutt_b2s(tempfile), 0400);
      }
    }
  
-@@ -594,7 +595,11 @@
+@@ -598,7 +599,11 @@
  
    rfc1524_free_entry (&entry);
    if (unlink_tempfile)
 +  {
 +    /* Restore write permission so mutt_unlink can open the file for writing */
-+    chmod(tempfile, 0600);
++    chmod(mutt_b2s(tempfile), 0600);
      mutt_unlink (mutt_b2s (tempfile));
 +  }
    if (unlink_pagerfile)

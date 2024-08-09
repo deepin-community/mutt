@@ -4,12 +4,12 @@ Subject: gpg.rc-paths
 
 Use the correct path of pgpewrap.
 ---
- contrib/gpg.rc | 11 ++---------
- 1 file changed, 2 insertions(+), 9 deletions(-)
+ contrib/gpg.rc |    8 ++------
+ 1 file changed, 2 insertions(+), 6 deletions(-)
 
 --- a/contrib/gpg.rc
 +++ b/contrib/gpg.rc
-@@ -72,20 +72,16 @@
+@@ -72,20 +72,16 @@ set pgp_verify_command="gpg --status-fd=
  set pgp_decrypt_command="gpg --status-fd=2 %?p?--passphrase-fd 0 --pinentry-mode=loopback? --no-verbose --quiet --batch --output - %f"
  
  # create a pgp/mime signed attachment

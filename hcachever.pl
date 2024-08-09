@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Copyright (C) 2020 Kevin J. McCarthy <kevin@8t8.us>
+# Copyright (C) 2020-2021 Kevin J. McCarthy <kevin@8t8.us>
 #
 #     This program is free software; you can redistribute it and/or modify
 #     it under the terms of the GNU General Public License as published by
@@ -81,7 +81,7 @@ sub process_struct($$) {
     }
   }
 
-  if ($struct =~ /^(ADDRESS|LIST|BUFFER|PARAMETER|BODY|ENVELOPE|HEADER)$/) {
+  if ($struct =~ /^(ADDRESS|LIST|BUFFER|PARAMETER|BODY|ENVELOPE|HEADER|COLOR_ATTR)$/) {
     $bodytxt = join(" ", @body);
     print " * ${struct}: ${bodytxt}\n";
 

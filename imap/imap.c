@@ -497,7 +497,7 @@ int imap_open_connection (IMAP_DATA* idata)
         rc = MUTT_YES;
       else if ((rc = query_quadoption (OPT_SSLSTARTTLS,
                                        _("Secure connection with TLS?"))) == -1)
-	goto err_close_conn;
+	goto bail;
       if (rc == MUTT_YES)
       {
 	if ((rc = imap_exec (idata, "STARTTLS", IMAP_CMD_FAIL_OK)) == -1)
@@ -508,7 +508,7 @@ int imap_open_connection (IMAP_DATA* idata)
 	  {
 	    mutt_error (_("Could not negotiate TLS connection"));
 	    mutt_sleep (1);
-	    goto err_close_conn;
+	    goto bail;
 	  }
 	  else
 	  {
@@ -524,7 +524,7 @@ int imap_open_connection (IMAP_DATA* idata)
     {
       mutt_error _("Encrypted connection unavailable");
       mutt_sleep (1);
-      goto err_close_conn;
+      goto bail;
     }
 #endif
   }
@@ -542,7 +542,7 @@ int imap_open_connection (IMAP_DATA* idata)
     {
       mutt_error _("Encrypted connection unavailable");
       mutt_sleep (1);
-      goto err_close_conn;
+      goto bail;
     }
 #endif
 
@@ -559,9 +559,6 @@ int imap_open_connection (IMAP_DATA* idata)
 
   return 0;
 
-#if defined(USE_SSL)
-err_close_conn:
-#endif
 bail:
   imap_close_connection (idata);
   FREE (&idata->capstr);
@@ -872,7 +869,9 @@ static int imap_open_mailbox (CONTEXT* ctx)
     if ((rc = imap_cmd_step (idata)) != IMAP_CMD_CONTINUE)
       break;
 
-    pc = idata->buf + 2;
+    if (ascii_strncmp (idata->buf, "* ", 2))
+      continue;
+    pc = imap_next_word (idata->buf);
 
     /* Obtain list of available flags here, may be overridden by a
      * PERMANENTFLAGS tag in the OK response */
@@ -903,7 +902,7 @@ static int imap_open_mailbox (CONTEXT* ctx)
       dprint (3, (debugfile, "Getting mailbox UIDVALIDITY\n"));
       pc += 3;
       pc = imap_next_word (pc);
-      if (mutt_atoui (pc, &idata->uid_validity) < 0)
+      if (mutt_atoui (pc, &idata->uid_validity, MUTT_ATOI_ALLOW_TRAILING) < 0)
         goto fail;
       status->uidvalidity = idata->uid_validity;
     }
@@ -912,7 +911,7 @@ static int imap_open_mailbox (CONTEXT* ctx)
       dprint (3, (debugfile, "Getting mailbox UIDNEXT\n"));
       pc += 3;
       pc = imap_next_word (pc);
-      if (mutt_atoui (pc, &idata->uidnext) < 0)
+      if (mutt_atoui (pc, &idata->uidnext, MUTT_ATOI_ALLOW_TRAILING) < 0)
         goto fail;
       status->uidnext = idata->uidnext;
     }
@@ -921,7 +920,7 @@ static int imap_open_mailbox (CONTEXT* ctx)
       dprint (3, (debugfile, "Getting mailbox HIGHESTMODSEQ\n"));
       pc += 3;
       pc = imap_next_word (pc);
-      if (mutt_atoull (pc, &idata->modseq) < 0)
+      if (mutt_atoull (pc, &idata->modseq, MUTT_ATOI_ALLOW_TRAILING) < 0)
         goto fail;
       status->modseq = idata->modseq;
     }
@@ -1051,9 +1050,15 @@ static int imap_open_mailbox_append (CONTEXT *ctx, int flags)
   if (rc == -1)
     return -1;
 
-  snprintf (buf, sizeof (buf), _("Create %s?"), mailbox);
-  if (option (OPTCONFIRMCREATE) && mutt_yesorno (buf, 1) < 1)
-    return -1;
+  if (option (OPTCONFIRMCREATE))
+  {
+    if (option (OPTNOCURSES))
+      return -1;
+
+    snprintf (buf, sizeof (buf), _("Create %s?"), mailbox);
+    if (mutt_query_boolean (OPTCONFIRMCREATE, buf, 1) < 1)
+      return -1;
+  }
 
   if (imap_create_mailbox (idata, mailbox) < 0)
     return -1;
@@ -1132,7 +1137,15 @@ int imap_has_flag (LIST* flag_list, const char* flag)
   return 0;
 }
 
-/* Note: headers must be in SORT_ORDER. See imap_exec_msgset for args.
+static int compare_uid (const void *a, const void *b)
+{
+  HEADER **pa = (HEADER **) a;
+  HEADER **pb = (HEADER **) b;
+
+  return mutt_numeric_cmp (HEADER_DATA(*pa)->uid, HEADER_DATA(*pb)->uid);
+}
+
+/* Note: headers must be in SORT_UID. See imap_exec_msgset for args.
  * Pos is an opaque pointer a la strtok. It should be 0 at first call. */
 static int imap_make_msg_set (IMAP_DATA* idata, BUFFER* buf, int flag,
                               int changed, int invert, int* pos)
@@ -1207,9 +1220,8 @@ static int imap_make_msg_set (IMAP_DATA* idata, BUFFER* buf, int flag,
       else if (n == idata->ctx->msgcount-1)
 	mutt_buffer_add_printf (buf, ":%u", HEADER_DATA (hdrs[n])->uid);
     }
-    /* End current set if message doesn't match or we've reached the end
-     * of the mailbox via inactive messages following the last match. */
-    else if (setstart && (hdrs[n]->active || n == idata->ctx->msgcount-1))
+    /* End current set if message doesn't match. */
+    else if (setstart)
     {
       if (HEADER_DATA (hdrs[n-1])->uid > setstart)
 	mutt_buffer_add_printf (buf, ":%u", HEADER_DATA (hdrs[n-1])->uid);
@@ -1260,15 +1272,15 @@ int imap_exec_msgset (IMAP_DATA* idata, const char* pre, const char* post,
     reopen_set = 1;
   }
   oldsort = Sort;
-  if (Sort != SORT_ORDER)
+  if (Sort != SORT_UID)
   {
     hdrs = idata->ctx->hdrs;
     idata->ctx->hdrs = safe_malloc (idata->ctx->msgcount * sizeof (HEADER*));
     memcpy (idata->ctx->hdrs, hdrs, idata->ctx->msgcount * sizeof (HEADER*));
 
-    Sort = SORT_ORDER;
+    Sort = SORT_UID;
     qsort (idata->ctx->hdrs, idata->ctx->msgcount, sizeof (HEADER*),
-           mutt_get_sort_func (SORT_ORDER));
+           compare_uid);
   }
 
   pos = 0;
@@ -1573,9 +1585,8 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
    * the new messages.  For an expunge, the restored hdrs would point
    * to headers that have been freed.
    *
-   * Since reopen is allowed, we could change this to call
-   * mutt_sort_headers() before and after instead, but the double sort
-   * is noticeably slower.
+   * Since reopen is allowed, we could sort before and after but this
+   * is noticable slower.
    *
    * So instead, just turn off reopen_allow for the duration of the
    * swapped hdrs.  The imap_exec() below flushes the queue out,
@@ -1583,15 +1594,15 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
    */
   imap_disallow_reopen (ctx);
   oldsort = Sort;
-  if (Sort != SORT_ORDER)
+  if (Sort != SORT_UID)
   {
     hdrs = ctx->hdrs;
     ctx->hdrs = safe_malloc (ctx->msgcount * sizeof (HEADER*));
     memcpy (ctx->hdrs, hdrs, ctx->msgcount * sizeof (HEADER*));
 
-    Sort = SORT_ORDER;
+    Sort = SORT_UID;
     qsort (ctx->hdrs, ctx->msgcount, sizeof (HEADER*),
-           mutt_get_sort_func (SORT_ORDER));
+           compare_uid);
   }
 
   rc = sync_helper (idata, MUTT_ACL_DELETE, MUTT_DELETED, "\\Deleted");
@@ -1670,7 +1681,7 @@ int imap_sync_mailbox (CONTEXT* ctx, int expunge, int* index_hint)
 
   if (expunge && ctx->closing)
   {
-    imap_exec (idata, "CLOSE", IMAP_CMD_QUEUE);
+    imap_exec (idata, "CLOSE", 0);
     idata->state = IMAP_AUTHENTICATED;
   }
 
@@ -1715,7 +1726,7 @@ int imap_close_mailbox (CONTEXT* ctx)
       /* mx_close_mailbox won't sync if there are no deleted messages
        * and the mailbox is unchanged, so we may have to close here */
       if (!ctx->deleted)
-        imap_exec (idata, "CLOSE", IMAP_CMD_QUEUE);
+        imap_exec (idata, "CLOSE", 0);
       idata->state = IMAP_AUTHENTICATED;
     }
 
@@ -2285,7 +2296,7 @@ int imap_subscribe (char *path, int subscribe)
   if (option (OPTIMAPCHECKSUBSCRIBED))
   {
     if (subscribe)
-      mutt_buffy_add (path, NULL, -1);
+      mutt_buffy_add (path, NULL, -1, -1);
     else
       mutt_buffy_remove (path);
   }
@@ -2361,7 +2372,7 @@ imap_complete_hosts (char *dest, size_t len)
     if (conn->account.type != MUTT_ACCT_TYPE_IMAP)
       continue;
 
-    mutt_account_tourl (&conn->account, &url);
+    mutt_account_tourl (&conn->account, &url, 0);
     /* FIXME: how to handle multiple users on the same host? */
     url.user = NULL;
     url.path = NULL;
@@ -2390,7 +2401,7 @@ int imap_complete(char* dest, size_t dlen, const char* path)
   char buf[LONG_STRING*2];
   IMAP_LIST listresp;
   char completion[LONG_STRING];
-  int clen;
+  size_t clen;
   size_t matchlen = 0;
   int completions = 0;
   IMAP_MBOX mx;
@@ -2508,6 +2519,25 @@ int imap_fast_trash (CONTEXT* ctx, char* dest)
     return 1;
   }
 
+  /* Scan if any of the messages were previously checkpoint-deleted
+   * on the server, by answering "no" to $delete for instance.
+   * In that case, doing a UID COPY would also copy the deleted flag, which
+   * is probably not desired.  Trying to work around that leads to all sorts
+   * of headaches, so just force a manual append.
+   */
+  for (n = 0; n < ctx->msgcount; n++)
+  {
+    if (ctx->hdrs[n]->active &&
+        ctx->hdrs[n]->deleted && !ctx->hdrs[n]->purge &&
+        HEADER_DATA(ctx->hdrs[n])->deleted)
+    {
+      dprint (1, (debugfile,
+                  "imap_fast_trash: server-side delete flag set. aborting.\n"));
+      rc = -1;
+      goto out;
+    }
+  }
+
   imap_fix_path (idata, mx.mbox, mbox, sizeof (mbox));
   if (!*mbox)
     strfcpy (mbox, "INBOX", sizeof (mbox));
@@ -2560,7 +2590,8 @@ int imap_fast_trash (CONTEXT* ctx, char* dest)
         break;
       dprint (3, (debugfile, "imap_fast_trash: server suggests TRYCREATE\n"));
       snprintf (prompt, sizeof (prompt), _("Create %s?"), mbox);
-      if (option (OPTCONFIRMCREATE) && mutt_yesorno (prompt, 1) < 1)
+      if (option (OPTCONFIRMCREATE) &&
+          mutt_query_boolean (OPTCONFIRMCREATE, prompt, 1) < 1)
       {
         mutt_clear_error ();
         goto out;

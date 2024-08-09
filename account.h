@@ -38,6 +38,9 @@ enum
 #define MUTT_ACCT_LOGIN (1<<2)
 #define MUTT_ACCT_PASS  (1<<3)
 #define MUTT_ACCT_SSL   (1<<4)
+/* these are used to regenerate a URL in same form it was parsed */
+#define MUTT_ACCT_USER_FROM_URL (1<<5)
+#define MUTT_ACCT_PASS_FROM_URL (1<<6)
 
 typedef struct
 {
@@ -52,9 +55,11 @@ typedef struct
 
 int mutt_account_match (const ACCOUNT* a1, const ACCOUNT* m2);
 int mutt_account_fromurl (ACCOUNT* account, ciss_url_t* url);
-void mutt_account_tourl (ACCOUNT* account, ciss_url_t* url);
+void mutt_account_tourl (ACCOUNT* account, ciss_url_t* url, int force_user);
 int mutt_account_getuser (ACCOUNT* account);
 int mutt_account_getlogin (ACCOUNT* account);
+int _mutt_account_getpass (ACCOUNT* account,
+                           void (*prompt_func) (char *, size_t, ACCOUNT *));
 int mutt_account_getpass (ACCOUNT* account);
 void mutt_account_unsetpass (ACCOUNT* account);
 int mutt_account_getoauthbearer (ACCOUNT* account, BUFFER *authbearer, int xoauth2);

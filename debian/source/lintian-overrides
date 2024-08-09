@@ -1,1 +1,14 @@
-testsuite-autopkgtest-missing
+# These HTML files are distributed by mutt and are actually present in the
+# .orig.tar.gz file
+mutt: source-is-missing [doc/advancedusage.html]
+mutt: source-is-missing [doc/configuration.html]
+mutt: source-is-missing [doc/gettingstarted.html]
+mutt: source-is-missing [doc/index.html]
+mutt: source-is-missing [doc/intro.html]
+mutt: source-is-missing [doc/manual.html]
+mutt: source-is-missing [doc/mimesupport.html]
+mutt: source-is-missing [doc/miscellany.html]
+mutt: source-is-missing [doc/optionalfeatures.html]
+mutt: source-is-missing [doc/reference.html]
+mutt: source-is-missing [doc/security.html]
+mutt: source-is-missing [doc/tuning.html]

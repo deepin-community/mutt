@@ -104,6 +104,9 @@ void rfc2231_decode_parameters (PARAMETER **headp)
   {
     q = p->next;
 
+    /* Single value, non encoded:
+     *   attr=value
+     */
     if (!(s = strchr (p->attribute, '*')))
     {
 
@@ -123,6 +126,9 @@ void rfc2231_decode_parameters (PARAMETER **headp)
       last = &p->next;
       p->next = NULL;
     }
+    /* Single value with encoding:
+     *   attr*=us-ascii''the%20value
+     */
     else if (*(s + 1) == '\0')
     {
       *s = '\0';
@@ -138,6 +144,11 @@ void rfc2231_decode_parameters (PARAMETER **headp)
 
       dirty = 1;
     }
+    /* A parameter continuation, which may or may not be encoded:
+     *   attr*0=value
+     *     -or-
+     *   attr*0*=us-ascii''the%20value
+     */
     else
     {
       *s = '\0'; s++; /* let s point to the first character of index. */
@@ -150,7 +161,7 @@ void rfc2231_decode_parameters (PARAMETER **headp)
          thus an overflow should never occur in a valid message, thus
          the value INT_MAX in case of overflow does not really matter
          (the goal is just to avoid undefined behavior). */
-      if (mutt_atoi (s, &index))
+      if (mutt_atoi (s, &index, 0) < 0)
         index = INT_MAX;
 
       conttmp = rfc2231_new_parameter ();
@@ -306,7 +317,10 @@ static void rfc2231_join_continuations (PARAMETER **head,
     if (value)
     {
       if (encoded)
+      {
 	mutt_convert_string (&value, charset, Charset, MUTT_ICONV_HOOK_FROM);
+        mutt_filter_unprintable (&value);
+      }
       *head = mutt_new_parameter ();
       (*head)->attribute = safe_strdup (attribute);
       (*head)->value = value;

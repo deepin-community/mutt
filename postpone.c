@@ -591,7 +591,7 @@ int mutt_prepare_template (FILE *fp, CONTEXT *ctx, HEADER *newhdr, HEADER *hdr,
 
   memset (&s, 0, sizeof (s));
 
-  if (!fp && (msg = mx_open_message (ctx, hdr->msgno)) == NULL)
+  if (!fp && (msg = mx_open_message (ctx, hdr->msgno, 0)) == NULL)
     return (-1);
 
   if (!fp) fp = msg->fp;
@@ -600,7 +600,7 @@ int mutt_prepare_template (FILE *fp, CONTEXT *ctx, HEADER *newhdr, HEADER *hdr,
 
   /* parse the message header and MIME structure */
 
-  fseeko (fp, hdr->offset, 0);
+  fseeko (fp, hdr->offset, SEEK_SET);
   newhdr->offset = hdr->offset;
   /* enable header weeding for resent messages */
   newhdr->env = mutt_read_rfc822_header (fp, newhdr, 1, resend);
@@ -614,7 +614,7 @@ int mutt_prepare_template (FILE *fp, CONTEXT *ctx, HEADER *newhdr, HEADER *hdr,
   if (resend)
   {
     FREE (&newhdr->env->message_id);
-    FREE (&newhdr->env->mail_followup_to);
+    rfc822_free_address (&newhdr->env->mail_followup_to);
   }
 
   /* decrypt pgp/mime encoded messages */
