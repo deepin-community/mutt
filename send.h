@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Kevin J. McCarthy <kevin@8t8.us>
+ * Copyright (C) 2020-2021 Kevin J. McCarthy <kevin@8t8.us>
  *
  *     This program is free software; you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ typedef struct send_scope
   char *maildir;  /* $folder */
   char *outbox;
   char *postponed;
+  char *cur_folder;  /* '^' mailbox shortcut expansion */
   ADDRESS *env_from;
   ADDRESS *from;
   char *sendmail;

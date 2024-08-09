@@ -61,11 +61,32 @@ int imap_expand_path (BUFFER* path)
     return -1;
 
   idata = imap_conn_find (&mx.account, MUTT_IMAP_CONN_NONEW);
-  mutt_account_tourl (&mx.account, &url);
+  mutt_account_tourl (&mx.account, &url, 0);
   imap_fix_path (idata, mx.mbox, fixedpath, sizeof (fixedpath));
   url.path = fixedpath;
 
   rc = url_ciss_tobuffer (&url, path, U_DECODE_PASSWD);
+  FREE (&mx.mbox);
+
+  return rc;
+}
+
+int imap_buffer_remove_path_password (BUFFER *dest, const char *src)
+{
+  IMAP_MBOX mx;
+  ciss_url_t url;
+  int rc;
+
+  mutt_buffer_clear (dest);
+
+  if (imap_parse_path (src, &mx) < 0)
+    return -1;
+
+  mutt_account_tourl (&mx.account, &url, 0);
+  url.path = mx.mbox;
+
+  /* flags = 0 will strip the password, if present */
+  rc = url_ciss_tobuffer (&url, dest, 0);
   FREE (&mx.mbox);
 
   return rc;
@@ -166,7 +187,8 @@ header_cache_t* imap_hcache_open (IMAP_DATA* idata, const char* path)
   if ((len > 3) && (strcmp(mutt_b2s (mbox) + len - 3, "/..") == 0))
     goto cleanup;
 
-  mutt_account_tourl (&idata->conn->account, &url);
+  /* force username in the url to ensure uniqueness */
+  mutt_account_tourl (&idata->conn->account, &url, 1);
   url.path = mbox->data;
   url_ciss_tobuffer (&url, cachepath, U_PATH);
 
@@ -356,6 +378,7 @@ int imap_parse_path (const char* path, IMAP_MBOX* mx)
       strfcpy (mx->account.user, tmp, sizeof (mx->account.user));
       strfcpy (tmp, c+1, sizeof (tmp));
       mx->account.flags |= MUTT_ACCT_USER;
+      mx->account.flags |= MUTT_ACCT_USER_FROM_URL;
     }
 
     if ((n = sscanf (tmp, "%127[^:/]%127s", mx->account.host, tmp)) < 1)
@@ -460,7 +483,7 @@ void imap_pretty_mailbox (char* path, size_t pathlen)
   }
   else
   {
-    mutt_account_tourl (&target.account, &url);
+    mutt_account_tourl (&target.account, &url, 0);
     url.path = target.mbox;
     url_ciss_tostring (&url, path, pathlen, 0);
   }
@@ -597,7 +620,7 @@ int imap_get_literal_count(const char *buf, unsigned int *bytes)
   while (isdigit ((unsigned char) *pc))
     pc++;
   *pc = 0;
-  if (mutt_atoui (pn, bytes) < 0)
+  if (mutt_atoui (pn, bytes, 0) < 0)
     return -1;
 
   return 0;
@@ -690,41 +713,46 @@ time_t imap_parse_date (char *s)
   return (mutt_mktime (&t, 0) + tz);
 }
 
-/* format date in IMAP style: DD-MMM-YYYY HH:MM:SS +ZZzz.
- * Caller should provide a buffer of IMAP_DATELEN bytes */
-void imap_make_date (char *buf, time_t timestamp)
+/* format date in IMAP style: DD-MMM-YYYY HH:MM:SS +ZZzz. */
+void imap_make_date (BUFFER *buf, time_t timestamp)
 {
   struct tm* tm = localtime (&timestamp);
   time_t tz = mutt_local_tz (timestamp);
 
   tz /= 60;
 
-  snprintf (buf, IMAP_DATELEN, "%02d-%s-%d %02d:%02d:%02d %+03d%02d",
-            tm->tm_mday, Months[tm->tm_mon], tm->tm_year + 1900,
-            tm->tm_hour, tm->tm_min, tm->tm_sec,
-            (int) tz / 60, (int) abs ((int) tz) % 60);
+  mutt_buffer_printf (buf, "%02d-%s-%d %02d:%02d:%02d %+03d%02d",
+                      tm->tm_mday, Months[tm->tm_mon], tm->tm_year + 1900,
+                      tm->tm_hour, tm->tm_min, tm->tm_sec,
+                      (int) tz / 60, (int) abs ((int) tz) % 60);
 }
 
-/* imap_qualify_path: make an absolute IMAP folder target, given IMAP_MBOX
- *   and relative path. */
+/* imap_qualify_path:
+ *
+ * Make an absolute IMAP folder target, given IMAP_MBOX and relative
+ * path.
+ *
+ * Note this will include the password in the URL, if it was present in the
+ * account connection URL.
+ */
 void imap_qualify_path (char *dest, size_t len, IMAP_MBOX *mx, char* path)
 {
   ciss_url_t url;
 
-  mutt_account_tourl (&mx->account, &url);
+  mutt_account_tourl (&mx->account, &url, 0);
   url.path = path;
 
-  url_ciss_tostring (&url, dest, len, 0);
+  url_ciss_tostring (&url, dest, len, U_DECODE_PASSWD);
 }
 
 void imap_buffer_qualify_path (BUFFER *dest, IMAP_MBOX *mx, char* path)
 {
   ciss_url_t url;
 
-  mutt_account_tourl (&mx->account, &url);
+  mutt_account_tourl (&mx->account, &url, 0);
   url.path = path;
 
-  url_ciss_tobuffer (&url, dest, 0);
+  url_ciss_tobuffer (&url, dest, U_DECODE_PASSWD);
 }
 
 
@@ -1036,23 +1064,21 @@ int mutt_seqset_iterator_next (SEQSET_ITERATOR *iter, unsigned int *next)
     if (iter->substr_cur == iter->eostr)
       return 1;
 
-    while (!*(iter->substr_cur))
-      iter->substr_cur++;
     iter->substr_end = strchr (iter->substr_cur, ',');
     if (!iter->substr_end)
       iter->substr_end = iter->eostr;
     else
-      *(iter->substr_end) = '\0';
+      *(iter->substr_end++) = '\0';
 
     range_sep = strchr (iter->substr_cur, ':');
     if (range_sep)
       *range_sep++ = '\0';
 
-    if (mutt_atoui (iter->substr_cur, &iter->range_cur))
+    if (mutt_atoui (iter->substr_cur, &iter->range_cur, 0))
       return -1;
     if (range_sep)
     {
-      if (mutt_atoui (range_sep, &iter->range_end))
+      if (mutt_atoui (range_sep, &iter->range_end, 0))
         return -1;
     }
     else

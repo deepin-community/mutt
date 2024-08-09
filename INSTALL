@@ -31,6 +31,9 @@ systems:
 
 - A C99 compiler (such as GCC) is required.
 
+- A C99 compliant libc is also required, starting with Mutt 2.1.0.
+  This means very old systems will likely not compile or work correctly.
+
 - You must also have a SysV compatible curses library, or you must
   install either
 
@@ -71,7 +74,7 @@ options are:
 
 --enable-autocrypt
         enable autocrypt 1.1 <https://autocrypt.org/> support.
-        Requires sqlite3.
+        Requires sqlite3 (via the --with-sqlite3 option).
 
 --enable-gpgme
         enable GPGME crypt backend support.
@@ -136,10 +139,11 @@ options are:
 	significantly more memory.
 
 --enable-hcache
-        Enable header caching support.  Mutt will scan for header
-        cache libraries in the order: tokyocabinet, qdbm, gdbm, bdb,
-        lmdb, kyotocabinet.  The library locations can be specified,
-        or disabled, via with --with/--without for each of those.
+        Enable header caching support.  If no backend library is
+        specified via a --with option (e.g. --with-kyotocabinet), Mutt
+        will scan in the order: kyotocabinet, tokyocabinet, lmdb,
+        qdbm, gdbm, bdb.  To skip scanning one or more of these
+        libraries, use the corresponding --without option.
 
 --disable-nls
 	This switch disables mutt's native language support.
@@ -158,6 +162,10 @@ options are:
 	work better for some people because it is less picky about proper
 	termcap entries than ncurses.  It is recommended that you use at
 	*least* version 0.99-38 with Mutt.
+
+--with-sqlite3[=DIR]
+	use the sqlite3 lib in DIR/lib.  This is currently only needed
+	by the --enable-autocrypt option.
 
 --with-mailpath=DIR
 	specify where the spool mailboxes are located on your system
@@ -189,13 +197,6 @@ options are:
 	and more may be added by the system administrator without recompiling
 	mutt. SASL may also be able to encrypt your mail session even if
 	SSL is not available.
-
---with-included-gettext
-	Mutt will be built using the GNU gettext library included in
-	the intl/ sub-directory.  You may need to use this switch if
-	your machine has something which looks like gettext to the
-	configure script, but isn't able to cope with mutt's catalog
-	files.
 
 --with-bundled-regex
 	use bundled GNU regex instead of local regexp routines.  Many systems

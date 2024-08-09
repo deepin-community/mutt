@@ -305,25 +305,24 @@ void mutt_edit_file (const char *editor, const char *data)
     mutt_error (_("Error running \"%s\"!"), mutt_b2s (cmd));
     mutt_sleep (2);
   }
-#if defined (USE_SLANG_CURSES) || defined (HAVE_RESIZETERM)
-  /* the terminal may have been resized while the editor owned it */
-  mutt_resize_screen ();
-#endif
-  keypad (stdscr, TRUE);
-  clearok (stdscr, TRUE);
 
   mutt_buffer_pool_release (&cmd);
 }
 
-int mutt_yesorno (const char *msg, int def)
+/* Prompts for a yes or no response.
+ * If var is non-null, it will print a help message referencing the variable
+ * when '?' is pressed.
+ */
+int mutt_yesorno_with_help (const char *msg, int def, const char *var)
 {
   event_t ch;
   char *yes = _("yes");
   char *no = _("no");
-  char *answer_string;
+  BUFFER *answer_buffer = NULL, *help_buffer = NULL;
   int answer_string_wid, msg_wid;
-  size_t trunc_msg_len;
+  size_t trunc_msg_len, trunc_help_len;
   int redraw = 1, prompt_lines = 1;
+  int show_help_prompt = 0, show_help = 0;
 
 #ifdef HAVE_LANGINFO_YESEXPR
   char *expr;
@@ -341,14 +340,23 @@ int mutt_yesorno (const char *msg, int def)
     !REGCOMP (&reno, expr, REG_NOSUB);
 #endif
 
+  if (var)
+    show_help_prompt = 1;
+
   /*
    * In order to prevent the default answer to the question to wrapped
    * around the screen in the even the question is wider than the screen,
    * ensure there is enough room for the answer and truncate the question
    * to fit.
    */
-  safe_asprintf (&answer_string, " ([%s]/%s): ", def == MUTT_YES ? yes : no, def == MUTT_YES ? no : yes);
-  answer_string_wid = mutt_strwidth (answer_string);
+  answer_buffer = mutt_buffer_pool_get ();
+  mutt_buffer_printf (answer_buffer,
+                      " ([%s]/%s%s): ",
+                      def == MUTT_YES ? yes : no,
+                      def == MUTT_YES ? no : yes,
+                      show_help_prompt ? "/?" : "");
+  answer_string_wid = mutt_strwidth (mutt_b2s (answer_buffer));
+
   msg_wid = mutt_strwidth (msg);
 
   FOREVER
@@ -371,21 +379,36 @@ int mutt_yesorno (const char *msg, int def)
           MuttMessageWindow->cols;
         prompt_lines = MAX (1, MIN (3, prompt_lines));
       }
-      if (prompt_lines != MuttMessageWindow->rows)
-      {
-        reflow_message_window_rows (prompt_lines);
-        mutt_current_menu_redraw ();
-      }
+      else
+        prompt_lines = 1;
 
       /* maxlen here is sort of arbitrary, so pick a reasonable upper bound */
       trunc_msg_len = mutt_wstr_trunc (msg, 4 * prompt_lines * MuttMessageWindow->cols,
                                        prompt_lines * MuttMessageWindow->cols - answer_string_wid,
                                        NULL);
 
+      if (show_help)
+        prompt_lines += 1;
+
+      if (prompt_lines != MuttMessageWindow->rows)
+      {
+        reflow_message_window_rows (prompt_lines);
+        mutt_current_menu_redraw ();
+      }
+
       mutt_window_move (MuttMessageWindow, 0, 0);
       SETCOLOR (MT_COLOR_PROMPT);
+      if (show_help)
+      {
+        trunc_help_len = mutt_wstr_trunc (mutt_b2s (help_buffer),
+                                          help_buffer->dsize,
+                                          MuttMessageWindow->cols, NULL);
+        addnstr (mutt_b2s (help_buffer), trunc_help_len);
+        mutt_window_clrtoeol (MuttMessageWindow);
+        mutt_window_move (MuttMessageWindow, 1, 0);
+      }
       addnstr (msg, trunc_msg_len);
-      addstr (answer_string);
+      addstr (mutt_b2s (answer_buffer));
       NORMAL_COLOR;
       mutt_window_clrtoeol (MuttMessageWindow);
     }
@@ -427,13 +450,41 @@ int mutt_yesorno (const char *msg, int def)
       def = MUTT_NO;
       break;
     }
+    else if (show_help_prompt && ch.ch == '?')
+    {
+      show_help_prompt = 0;
+      show_help = 1;
+      redraw = 1;
+
+      mutt_buffer_printf (answer_buffer,
+                          " ([%s]/%s): ",
+                          def == MUTT_YES ? yes : no,
+                          def == MUTT_YES ? no : yes);
+      answer_string_wid = mutt_strwidth (mutt_b2s (answer_buffer));
+
+      help_buffer = mutt_buffer_pool_get ();
+      /* L10N:
+         In the mutt_yesorno() prompt, some variables and all
+         quadoptions provide a '?' choice to provide the name of the
+         configuration variable this prompt is dependent on.
+
+         For example, the prompt "Quit Mutt?" is dependent on the
+         quadoption $quit.
+
+         Typing '?' at those prompts will print this message above
+         the prompt, where %s is the name of the configuration
+         variable.
+      */
+      mutt_buffer_printf (help_buffer, _("See $%s for more information."), var);
+    }
     else
     {
       BEEP();
     }
   }
 
-  FREE (&answer_string);
+  mutt_buffer_pool_release (&answer_buffer);
+  mutt_buffer_pool_release (&help_buffer);
 
 #ifdef HAVE_LANGINFO_YESEXPR
   if (reyes_ok)
@@ -452,7 +503,8 @@ int mutt_yesorno (const char *msg, int def)
 
   if (def != -1)
   {
-    addstr ((char *) (def == MUTT_YES ? yes : no));
+    mutt_window_mvaddstr (MuttMessageWindow, 0, 0,
+                          def == MUTT_YES ? yes : no);
     mutt_refresh ();
   }
   else
@@ -463,6 +515,12 @@ int mutt_yesorno (const char *msg, int def)
   }
   return (def);
 }
+
+int mutt_yesorno (const char *msg, int def)
+{
+  return mutt_yesorno_with_help (msg, def, NULL);
+}
+
 
 /* this function is called when the user presses the abort key */
 void mutt_query_exit (void)
@@ -475,8 +533,9 @@ void mutt_query_exit (void)
   {
     if (!(mutt_background_has_backgrounded () &&
           option (OPTBACKGROUNDCONFIRMQUIT) &&
-          mutt_yesorno (_("There are $background_edit sessions. Really quit Mutt?"),
-                        MUTT_NO) == MUTT_NO))
+          mutt_query_boolean (OPTBACKGROUNDCONFIRMQUIT,
+              _("There are $background_edit sessions. Really quit Mutt?"),
+              MUTT_NO) != MUTT_YES))
     {
       endwin ();
       exit (1);
@@ -537,7 +596,7 @@ static void error_history_dump (FILE *f)
   } while (cur != ErrorHistory.last);
 }
 
-void mutt_error_history_display ()
+void mutt_error_history_display (void)
 {
   static int in_process = 0;
   BUFFER *t = NULL;
@@ -731,7 +790,7 @@ out:
     mutt_clear_error ();
 }
 
-void mutt_init_windows ()
+void mutt_init_windows (void)
 {
   MuttHelpWindow = safe_calloc (sizeof (mutt_window_t), 1);
   MuttIndexWindow = safe_calloc (sizeof (mutt_window_t), 1);
@@ -742,7 +801,7 @@ void mutt_init_windows ()
 #endif
 }
 
-void mutt_free_windows ()
+void mutt_free_windows (void)
 {
   FREE (&MuttHelpWindow);
   FREE (&MuttIndexWindow);
@@ -784,10 +843,14 @@ void mutt_reflow_windows (void)
   if (option (OPTSIDEBAR))
   {
     memcpy (MuttSidebarWindow, MuttIndexWindow, sizeof (mutt_window_t));
-    MuttSidebarWindow->cols = SidebarWidth;
+    MuttSidebarWindow->cols = MAX (SidebarWidth, 0);
+    /* Ensure the index window has at least one column, to prevent
+     * pager regressions. */
+    if (MuttSidebarWindow->cols >= MuttIndexWindow->cols)
+      MuttSidebarWindow->cols = MuttIndexWindow->cols - 1;
 
-    MuttIndexWindow->cols -= SidebarWidth;
-    MuttIndexWindow->col_offset += SidebarWidth;
+    MuttIndexWindow->cols -= MuttSidebarWindow->cols;
+    MuttIndexWindow->col_offset += MuttSidebarWindow->cols;
   }
 #endif
 
@@ -926,6 +989,7 @@ void mutt_endwin (const char *msg)
      */
     mutt_refresh();
     endwin ();
+    SigWinch = 1;
   }
 
   if (msg && *msg)
@@ -1449,7 +1513,7 @@ void mutt_paddstr (int n, const char *s)
     {
       if (w > n)
 	break;
-      addnstr ((char *)s, k);
+      mutt_addwch (wc);
       n -= w;
     }
   }

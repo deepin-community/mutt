@@ -28,7 +28,7 @@ override_dh_auto_configure:
 		--with-gss			\
 		--with-idn2			\
 		--with-mixmaster		\
-		--with-sasl			\
+		--with-gsasl			\
 						\
 		--without-gdbm 			\
 		--without-bdb			\

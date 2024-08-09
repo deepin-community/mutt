@@ -41,8 +41,8 @@
  */
 static char* EditorHelp1 = N_("\
 ~~		insert a line beginning with a single ~\n\
-~b users	add users to the Bcc: field\n\
-~c users	add users to the Cc: field\n\
+~b addresses	add addresses to the Bcc: field\n\
+~c addresses	add addresses to the Cc: field\n\
 ~f messages	include messages\n\
 ~F messages	same as ~f, except also include headers\n\
 ~h		edit the message header\n\
@@ -63,11 +63,11 @@ static char* EditorHelp2 = N_("\
 
 static char **
 be_snarf_data (FILE *f, char **buf, int *bufmax, int *buflen, LOFF_T offset,
-	       int bytes, int prefix)
+	       LOFF_T bytes, int prefix)
 {
   char tmp[HUGE_STRING];
   char *p = tmp;
-  int tmplen = sizeof (tmp);
+  size_t tmplen = sizeof (tmp);
 
   tmp[sizeof (tmp) - 1] = 0;
   if (prefix)
@@ -78,7 +78,7 @@ be_snarf_data (FILE *f, char **buf, int *bufmax, int *buflen, LOFF_T offset,
     tmplen = sizeof (tmp) - tmplen;
   }
 
-  fseeko (f, offset, 0);
+  fseeko (f, offset, SEEK_SET);
   while (bytes > 0)
   {
     if (fgets (p, tmplen - 1, f) == NULL) break;
@@ -150,12 +150,13 @@ static char **
 be_include_messages (char *msg, char **buf, int *bufmax, int *buflen,
 		     int pfx, int inc_hdrs)
 {
-  int offset, bytes, n;
+  LOFF_T offset, bytes;
+  int n;
   char tmp[LONG_STRING];
 
   while ((msg = strtok (msg, " ,")) != NULL)
   {
-    if (mutt_atoi (msg, &n) == 0 && n > 0 && n <= Context->msgcount)
+    if (mutt_atoi (msg, &n, 0) == 0 && n > 0 && n <= Context->msgcount)
     {
       n--;
 

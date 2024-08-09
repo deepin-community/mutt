@@ -175,7 +175,7 @@ int mutt_compose_attachment (BODY *a)
 
 	    /* Remove headers by copying out data to another file, then
 	     * copying the file back */
-	    fseeko (fp, b->offset, 0);
+	    fseeko (fp, b->offset, SEEK_SET);
 	    mutt_buffer_mktemp (tempfile);
 	    if ((tfp = safe_fopen (mutt_b2s (tempfile), "w")) == NULL)
 	    {
@@ -369,15 +369,17 @@ int mutt_view_attachment (FILE *fp, BODY *a, int flag, HEADER *hdr,
   command = mutt_buffer_pool_get ();
 
   use_mailcap = (flag == MUTT_MAILCAP ||
-                 (flag == MUTT_REGULAR && mutt_needs_mailcap (a)));
+                 (flag == MUTT_REGULAR && mutt_needs_mailcap (a)) ||
+                 flag == MUTT_VIEW_PAGER);
   snprintf (type, sizeof (type), "%s/%s", TYPE (a), a->subtype);
 
   if (use_mailcap)
   {
     entry = rfc1524_new_entry ();
-    if (!rfc1524_mailcap_lookup (a, type, sizeof(type), entry, 0))
+    if (!rfc1524_mailcap_lookup (a, type, sizeof(type), entry,
+                                 flag == MUTT_VIEW_PAGER ? MUTT_AUTOVIEW : 0))
     {
-      if (flag == MUTT_REGULAR)
+      if (flag == MUTT_REGULAR || flag == MUTT_VIEW_PAGER)
       {
 	/* fallback to view as text */
 	rfc1524_free_entry (&entry);
@@ -402,12 +404,14 @@ int mutt_view_attachment (FILE *fp, BODY *a, int flag, HEADER *hdr,
     fname = safe_strdup (a->filename);
     /* In send mode (!fp), we allow slashes because those are part of
      * the tempfile.  The path will be removed in expand_filename */
-    mutt_sanitize_filename (fname, fp ? 1 : 0);
+    mutt_sanitize_filename (fname,
+                            (fp ? 0 : MUTT_SANITIZE_ALLOW_SLASH) |
+                            MUTT_SANITIZE_ALLOW_8BIT);
     mutt_rfc1524_expand_filename (entry->nametemplate, fname,
                                   tempfile);
     FREE (&fname);
 
-    if (mutt_save_attachment (fp, a, mutt_b2s (tempfile), 0, NULL) == -1)
+    if (mutt_save_attachment (fp, a, mutt_b2s (tempfile), 0, NULL, 0) == -1)
       goto return_error;
     unlink_tempfile = 1;
 
@@ -541,7 +545,7 @@ int mutt_view_attachment (FILE *fp, BODY *a, int flag, HEADER *hdr,
 	 * mutt_decode_attachment() since it assumes the content-encoding has
 	 * already been applied
 	 */
-	if (mutt_save_attachment(fp, a, mutt_b2s (pagerfile), 0, NULL))
+	if (mutt_save_attachment (fp, a, mutt_b2s (pagerfile), 0, NULL, 0))
 	  goto return_error;
         unlink_pagerfile = 1;
       }
@@ -689,7 +693,7 @@ int mutt_pipe_attachment (FILE *fp, BODY *b, const char *path, const char *outfi
 
     if (is_flowed)
     {
-      if (mutt_save_attachment (fp, b, mutt_b2s (unstuff_tempfile), 0, NULL) == -1)
+      if (mutt_save_attachment (fp, b, mutt_b2s (unstuff_tempfile), 0, NULL, 0) == -1)
         goto bail;
       unlink_unstuff = 1;
       mutt_rfc3676_space_unstuff_attachment (b, mutt_b2s (unstuff_tempfile));
@@ -751,7 +755,8 @@ mutt_save_attachment_open (const char *path, int flags)
 }
 
 /* returns 0 on success, -1 on error */
-int mutt_save_attachment (FILE *fp, BODY *m, const char *path, int flags, HEADER *hdr)
+int mutt_save_attachment (FILE *fp, BODY *m, const char *path, int flags, HEADER *hdr,
+                          int charset_conv)
 {
   if (fp)
   {
@@ -777,7 +782,7 @@ int mutt_save_attachment (FILE *fp, BODY *m, const char *path, int flags, HEADER
       hn->msgno = hdr->msgno; /* required for MH/maildir */
       hn->read = 1;
 
-      fseeko (fp, m->offset, 0);
+      fseeko (fp, m->offset, SEEK_SET);
       if (fgets (buf, sizeof (buf), fp) == NULL)
 	return -1;
       if (mx_open_mailbox(path, MUTT_APPEND | MUTT_QUIET, &ctx) == NULL)
@@ -807,13 +812,16 @@ int mutt_save_attachment (FILE *fp, BODY *m, const char *path, int flags, HEADER
       STATE s;
 
       memset (&s, 0, sizeof (s));
+      if (charset_conv)
+        s.flags = MUTT_CHARCONV;
+
       if ((s.fpout = mutt_save_attachment_open (path, flags)) == NULL)
       {
 	mutt_perror ("fopen");
 	mutt_sleep (2);
 	return (-1);
       }
-      fseeko ((s.fpin = fp), m->offset, 0);
+      fseeko ((s.fpin = fp), m->offset, SEEK_SET);
       mutt_decode_attachment (m, &s);
 
       if (fclose (s.fpout) != 0)
@@ -962,15 +970,24 @@ int mutt_print_attachment (FILE *fp, BODY *a)
   {
     rfc1524_entry *entry = NULL;
     int piped = 0;
+    char *sanitized_fname = NULL;
 
     dprint (2, (debugfile, "Using mailcap...\n"));
 
     entry = rfc1524_new_entry ();
     rfc1524_mailcap_lookup (a, type, sizeof(type), entry, MUTT_PRINT);
-    mutt_rfc1524_expand_filename (entry->nametemplate, a->filename,
-                                  newfile);
 
-    if (mutt_save_attachment (fp, a, mutt_b2s (newfile), 0, NULL) == -1)
+    sanitized_fname = safe_strdup (a->filename);
+    /* In send mode (!fp), we allow slashes because those are part of
+     * the tempfile.  The path will be removed in expand_filename */
+    mutt_sanitize_filename (sanitized_fname,
+                            (fp ? 0 : MUTT_SANITIZE_ALLOW_SLASH) |
+                            MUTT_SANITIZE_ALLOW_8BIT);
+    mutt_rfc1524_expand_filename (entry->nametemplate, sanitized_fname,
+                                  newfile);
+    FREE (&sanitized_fname);
+
+    if (mutt_save_attachment (fp, a, mutt_b2s (newfile), 0, NULL, 0) == -1)
       goto mailcap_cleanup;
     unlink_newfile = 1;
 

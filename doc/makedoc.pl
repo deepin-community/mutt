@@ -109,7 +109,8 @@ my %type2human = ("DT_NONE"      => "-none-",
                   "DT_MAGIC"     => "folder magic",
                   "DT_ADDR"      => "e-mail address",
                   "DT_MBCHARTBL" => "string",
-                  "DT_L10N_STR"  => "string (localized)");
+                  "DT_L10N_STR"  => "string (localized)",
+                  "DT_L10N_RX"   => "regular expression (localized)");
 
 my %string_types = ("DT_STR"       => 1,
                     "DT_RX"        => 1,
@@ -117,7 +118,8 @@ my %string_types = ("DT_STR"       => 1,
                     "DT_PATH"      => 1,
                     "DT_CMD_PATH"  => 1,
                     "DT_MBCHARTBL" => 1,
-                    "DT_L10N_STR"  => 1);
+                    "DT_L10N_STR"  => 1,
+                    "DT_L10N_RX"   => 1);
 
 my %quad2human = ("MUTT_YES" => "yes",
                   "MUTT_NO"  => "no",
@@ -127,14 +129,17 @@ my %quad2human = ("MUTT_YES" => "yes",
 my %bool2human = ("1" => "yes",
                   "0" => "no");
 
+my %sort_maps = ();
 
 # prototypes
 # to update:
 #   M-1 M-! grep '^sub' makedoc.pl
 sub makedoc();
 sub flush_doc($);
+sub handle_sort_maps();
+sub handle_sort_map($);
 sub handle_confline($);
-sub pretty_default($$);
+sub pretty_default($$$);
 sub string_unescape($);
 sub string_escape($);
 sub print_confline($$$);
@@ -176,7 +181,6 @@ makedoc();
 
 sub makedoc() {
   my $line;
-  my $lineno = 0;
   my $active = 0;
   my $docstat = $D_INIT;
 
@@ -189,6 +193,9 @@ sub makedoc() {
     elsif ($line eq '/*--*/') {
       $docstat = flush_doc($docstat);
       $active = 0;
+    }
+    elsif ($line eq '/*+sort+*/') {
+      handle_sort_maps();
     }
     elsif ($active) {
       if (($line =~ /^\/\*\*/) || ($line =~ /^\*\*/)) {
@@ -237,22 +244,83 @@ sub flush_doc($) {
 }
 
 ####################
+# Sort maps handling
+####################
+
+sub handle_sort_maps() {
+  my $line;
+  my $mapname;
+
+  while ($line = <STDIN>) {
+    chomp($line);
+    $line =~ s/^\s+//;
+
+    if ($line eq '/*-sort-*/') {
+      return;
+    }
+
+    if (($line =~ /^const\s+struct\s+mapping_t/) &&
+        ($line =~ /\/\*\s*(\S+)\s*\*\/\s*$/)) {
+      $mapname = $1;
+      handle_sort_map($mapname);
+    }
+  }
+}
+
+sub handle_sort_map($) {
+  my ($mapname) = @_;
+  my $line;
+  my $name;
+  my $value;
+
+  $sort_maps{$mapname} = {};
+
+  while ($line = <STDIN>) {
+    chomp($line);
+    $line =~ s/^\s+//;
+
+    if ($line =~ /^{\s*"(\S+)"\s*,\s*(\S+)\s*}/) {
+      $name = $1;
+      $value = $2;
+      if (!exists $sort_maps{$mapname}->{$value}) {
+        $sort_maps{$mapname}->{$value} = $name;
+      }
+    }
+    elsif ($line =~ /^{\s*NULL/) {
+      return;
+    }
+  }
+}
+
+####################
 # Confline handling
 ####################
 
 sub handle_confline($) {
   my ($line) = @_;
 
+  my $subtype = "";
   my $localized = 0;
   my ($name, $type, $flags, $data, $val) = split(/\s*,\s*/, $line, 5);
   $name =~ s/"//g;
 
   if ($type =~ /DT_L10N_STR/) {
     $localized = 1;
-    $type = "DT_L10N_STR";
   }
-  else {
-    $type =~ s/\|.*//;
+
+  $type =~ s/\|(.*)//;
+  $subtype = $1;
+
+  if ($localized) {
+    if ($type eq "DT_STR") {
+      $type = "DT_L10N_STR";
+    }
+    elsif ($type eq "DT_RX") {
+      $type = "DT_L10N_RX";
+    }
+    else {
+      die "Unknown localized type: $type\n"
+    }
   }
 
   $val =~ s/^{\s*\.[lp]\s*=\s*"?//;
@@ -266,13 +334,13 @@ sub handle_confline($) {
   # (?<!..) is a zero-width negative lookbehind assertion, asserting
   # the first quote isn't preceded by a backslash
   $val =~ s/(?<!\\)"\s+"//g;
-  $val = pretty_default($type, $val);
+  $val = pretty_default($type, $subtype, $val);
 
   print_confline($name, $type, $val);
 }
 
-sub pretty_default($$) {
-  my ($type, $val) = @_;
+sub pretty_default($$$) {
+  my ($type, $subtype, $val) = @_;
 
   if ($type eq "DT_QUAD") {
     $val = $quad2human{$val};
@@ -281,11 +349,22 @@ sub pretty_default($$) {
     $val = $bool2human{$val};
   }
   elsif ($type eq "DT_SORT") {
+    my $newval;
+
     if ($val !~ /^SORT_/) {
       die "Expected SORT_ prefix instead of $val\n";
     }
-    $val =~ s/^SORT_//;
-    $val = lc $val;
+    if (!$subtype) {
+      $subtype = $type;
+    }
+    if (!$sort_maps{$subtype}) {
+      die "Unknown SORT type $subtype\n";
+    }
+    $newval = $sort_maps{$subtype}->{$val};
+    if (!$newval) {
+      die "Unknown SORT value $val for map $subtype\n"
+    }
+    $val = $newval;
   }
   elsif ($type eq "DT_MAGIC") {
     if ($val !~ /^MUTT_/) {
@@ -322,6 +401,7 @@ sub string_unescape($) {
 sub string_escape($) {
   my ($val) = @_;
 
+  $val =~ s/\\/\\\\/g;
   $val =~ s/\r/\\r/g;
   $val =~ s/\n/\\n/g;
   $val =~ s/\t/\\t/g;

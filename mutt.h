@@ -22,9 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef HAVE_UNISTD_H
-# include <unistd.h> /* needed for SEEK_SET */
-#endif
+#include <unistd.h> /* needed for SEEK_SET */
 #ifdef HAVE_UNIX_H
 # include <unix.h>   /* needed for snprintf on QNX. */
 #endif
@@ -63,6 +61,7 @@
 #include "hash.h"
 #include "charset.h"
 #include "buffer.h"
+#include "color.h"
 
 #ifndef HAVE_WC_FUNCS
 # ifdef MB_LEN_MAX
@@ -215,6 +214,7 @@ enum
   /* modes for mutt_view_attachment() */
   MUTT_REGULAR = 1,
   MUTT_MAILCAP,
+  MUTT_VIEW_PAGER,
   MUTT_AS_TEXT,
 
   /* action codes used by mutt_set_flag() and mutt_pattern_function() */
@@ -314,11 +314,13 @@ enum
 {
   OPT_ABORT,
   OPT_ABORTNOATTACH,
+  OPT_ATTACH_SAVE_CHARCONV,
   OPT_BOUNCE,
   OPT_COPY,
   OPT_DELETE,
   OPT_FORWATTS,
   OPT_FORWEDIT,
+  OPT_FORWDECRYPT,
   OPT_FCCATTACH,
   OPT_INCLUDE,
   OPT_MFUPTO,
@@ -362,6 +364,7 @@ enum
 #define SENDTOSENDER            (1<<12)
 #define SENDGROUPCHATREPLY      (1<<13)
 #define SENDBACKGROUNDEDIT      (1<<14)  /* Allow background editing */
+#define SENDCHECKPOSTPONED      (1<<15)  /* Check for postponed messages */
 
 /* flags for mutt_edit_headers() */
 #define MUTT_EDIT_HEADERS_BACKGROUND  1
@@ -371,10 +374,20 @@ enum
 #define MUTT_SEL_BUFFY  (1<<0)
 #define MUTT_SEL_MULTI  (1<<1)
 #define MUTT_SEL_FOLDER (1<<2)
+#define MUTT_SEL_DIRECTORY (1<<3)  /* Allow directories to be selected
+                                    * via <view-file> */
 
 /* flags for parse_spam_list */
 #define MUTT_SPAM          1
 #define MUTT_NOSPAM        2
+
+/* flags for _mutt_set_flag() */
+#define MUTT_SET_FLAG_UPDATE_CONTEXT  (1<<0)
+
+/* flags for _mutt_buffer_expand_path() */
+#define MUTT_EXPAND_PATH_RX                     (1<<0)
+#define MUTT_EXPAND_PATH_EXPAND_RELATIVE        (1<<1)
+#define MUTT_EXPAND_PATH_REMOVE_TRAILING_SLASH  (1<<2)
 
 /* boolean vars */
 enum
@@ -405,6 +418,7 @@ enum
   OPTCHECKMBOXSIZE,
   OPTCHECKNEW,
   OPTCOLLAPSEUNREAD,
+  OPTCOMPOSECONFIRMDETACH,
   OPTCONFIRMAPPEND,
   OPTCONFIRMCREATE,
   OPTCOPYDECODEWEED,
@@ -478,6 +492,7 @@ enum
   OPTINCLUDEENCRYPTED,
   OPTINCLUDEONLYFIRST,
   OPTKEEPFLAGGED,
+  OPTLOCALDATEHEADER,
   OPTMUTTLISPINLINEEVAL,
   OPTMAILCAPSANITIZE,
   OPTMAILCHECKRECENT,
@@ -602,7 +617,6 @@ enum
   OPTPGPRETAINABLESIG,
   OPTPGPSELFENCRYPT,
   OPTPGPSTRICTENC,
-  OPTFORWDECRYPT,
   OPTPGPSHOWUNUSABLE,
   OPTPGPAUTOINLINE,
   OPTPGPREPLYINLINE,
@@ -731,10 +745,10 @@ typedef struct envelope
   ADDRESS *sender;
   ADDRESS *reply_to;
   ADDRESS *mail_followup_to;
-  char *list_post;		/* this stores a mailto URL, or nothing */
+  char *list_post;
   char *subject;
-  char *real_subj;		/* offset of the real subject */
-  char *disp_subj;		/* display subject (modified copy of subject) */
+  char *real_subj;      /* offset of the real subject */
+  char *disp_subj;      /* display subject (modified copy of subject) */
   char *message_id;
   char *supersedes;
   char *date;
@@ -910,7 +924,7 @@ typedef struct header
 
   short recipient;		/* user_is_recipient()'s return value, cached */
 
-  int pair; 			/* color-pair to use when displaying in the index */
+  COLOR_ATTR color; 		/* color-pair to use when displaying in the index */
 
   time_t date_sent;     	/* time when the message was sent (UTC) */
   time_t received;      	/* time when the message was placed in the mailbox */
@@ -950,6 +964,8 @@ struct mutt_thread
   unsigned int fake_thread : 1;
   unsigned int duplicate_thread : 1;
   unsigned int sort_children : 1;
+  unsigned int recalc_aux_key : 1;
+  unsigned int recalc_group_key : 1;
   unsigned int check_subject : 1;
   unsigned int visible : 1;
   unsigned int deep : 1;
@@ -960,7 +976,8 @@ struct mutt_thread
   THREAD *next;
   THREAD *prev;
   HEADER *message;
-  HEADER *sort_key;
+  HEADER *sort_group_key;  /* $sort_thread_groups - for thread roots */
+  HEADER *sort_aux_key;    /* $sort_aux - for messages below the root */
 };
 
 
@@ -1064,7 +1081,7 @@ struct mx_ops
   int (*close) (struct _context *);
   int (*check) (struct _context *ctx, int *index_hint);
   int (*sync) (struct _context *ctx, int *index_hint);
-  int (*open_msg) (struct _context *, struct _message *, int msgno);
+  int (*open_msg) (struct _context *, struct _message *, int msgno, int headers);
   int (*close_msg) (struct _context *, struct _message *);
   int (*commit_msg) (struct _context *, struct _message *);
   int (*open_new_msg) (struct _message *, struct _context *, HEADER *);
@@ -1098,6 +1115,10 @@ typedef struct _context
   int new;			/* how many new messages? */
   int unread;			/* how many unread messages? */
   int deleted;			/* how many deleted messages */
+  int trashed;			/* how many marked as trashed on disk.
+                                 * This flag is used by the maildir_trash
+                                 * option.
+                                 */
   int flagged;			/* how many flagged messages */
   int msgnotreadyet;		/* which msg "new" in pager, -1 if none */
 
@@ -1152,7 +1173,8 @@ typedef struct
 #define MUTT_CHARCONV      (1<<4) /* Do character set conversions */
 #define MUTT_PRINTING      (1<<5) /* are we printing? - MUTT_DISPLAY "light" */
 #define MUTT_REPLYING      (1<<6) /* are we replying? */
-#define MUTT_FIRSTDONE     (1<<7) /* the first attachment has been done */
+#define MUTT_FORWARDING    (1<<7) /* are we inline forwarding? */
+#define MUTT_FIRSTDONE     (1<<8) /* the first attachment has been done */
 
 #define state_set_prefix(s) ((s)->flags |= MUTT_PENDINGPREFIX)
 #define state_reset_prefix(s) ((s)->flags &= ~MUTT_PENDINGPREFIX)

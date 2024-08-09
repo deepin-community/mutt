@@ -45,6 +45,7 @@ const struct mapping_t Menus[] = {
   { "browser",	MENU_FOLDER },
   { "compose",	MENU_COMPOSE },
   { "editor",	MENU_EDITOR },
+  { "list",	MENU_LIST },
   { "index",	MENU_MAIN },
   { "pager",	MENU_PAGER },
   { "postpone",	MENU_POST },
@@ -79,10 +80,13 @@ static struct mapping_t KeyNames[] = {
   { "<Insert>",	KEY_IC },
   { "<Home>",	KEY_HOME },
   { "<End>",	KEY_END },
+  { "<Enter>",	'\n' },
+  { "<Return>",	'\r' },
 #ifdef KEY_ENTER
-  { "<Enter>",	KEY_ENTER },
+  { "<KeypadEnter>",	KEY_ENTER },
+#else
+  { "<KeypadEnter>",	'\n' },
 #endif
-  { "<Return>",	MUTT_ENTER_C },
   { "<Esc>",	'\033' },
   { "<Tab>",	'\t' },
   { "<Space>",	' ' },
@@ -302,7 +306,7 @@ void km_bindkey (char *s, int menu, int op)
   km_bind (s, menu, op, NULL, NULL);
 }
 
-static int get_op (const struct binding_t *bindings, const char *start, size_t len)
+static int get_op (const struct menu_func_op_t *bindings, const char *start, size_t len)
 {
   int i;
 
@@ -316,7 +320,7 @@ static int get_op (const struct binding_t *bindings, const char *start, size_t l
   return OP_NULL;
 }
 
-static char *get_func (const struct binding_t *bindings, int op)
+static char *get_func (const struct menu_func_op_t *bindings, int op)
 {
   int i;
 
@@ -374,7 +378,7 @@ static void generic_tokenize_push_string (char *s, void (*generic_push) (int, in
 	 * skip the '<' and the '>' when comparing */
 	for (i = 0; Menus[i].name; i++)
 	{
-	  const struct binding_t *binding = km_get_table (Menus[i].value);
+	  const struct menu_func_op_t *binding = km_get_table (Menus[i].value);
 	  if (binding)
 	  {
 	    op = get_op (binding, pp + 1, l - 2);
@@ -485,7 +489,7 @@ int km_dokey (int menu)
     if (tmp.op)
     {
       char *func = NULL;
-      const struct binding_t *bindings;
+      const struct menu_func_op_t *bindings;
 
       /* is this a valid op for this menu? */
       if ((bindings = km_get_table (menu)) &&
@@ -495,7 +499,7 @@ int km_dokey (int menu)
       if (menu == MENU_EDITOR && get_func (OpEditor, tmp.op))
 	return tmp.op;
 
-      if (menu != MENU_EDITOR && menu != MENU_PAGER)
+      if (menu != MENU_EDITOR && menu != MENU_PAGER && menu != MENU_GENERIC)
       {
 	/* check generic menu */
 	bindings = OpGeneric;
@@ -574,11 +578,11 @@ int km_dokey (int menu)
   /* not reached */
 }
 
-static void create_bindings (const struct binding_t *map, int menu)
+static void create_bindings (const struct menu_op_seq_t *map, int menu)
 {
   int i;
 
-  for (i = 0 ; map[i].name ; i++)
+  for (i = 0 ; map[i].op ; i++)
     if (map[i].seq)
       km_bindkey (map[i].seq, menu, map[i].op);
 }
@@ -607,10 +611,10 @@ static const char *km_keyname (int c)
   }
   else if (c >= KEY_F0 && c < KEY_F(256)) /* this maximum is just a guess */
     sprintf (buf, "<F%d>", c - KEY_F0);
-  else if (IsPrint (c))
+  else if (c < 256 && c >= -128 && IsPrint (c))
     snprintf (buf, sizeof (buf), "%c", (unsigned char) c);
   else
-    snprintf (buf, sizeof (buf), "\\x%hx", (unsigned short) c);
+    snprintf (buf, sizeof (buf), "<%ho>", (unsigned short) c);
   return (buf);
 }
 
@@ -724,7 +728,7 @@ void init_extended_keys(void)
 
       if (keyname)
       {
-        char *s = tigetstr((char *)keyname);
+        const char *s = mutt_tigetstr (keyname);
 	if (s && (long)(s) != -1)
 	{
 	  int code = key_defined(s);
@@ -741,119 +745,39 @@ void km_init (void)
 {
   memset (Keymaps, 0, sizeof (struct keymap_t *) * MENU_MAX);
 
-  create_bindings (OpAttach, MENU_ATTACH);
-  create_bindings (OpBrowser, MENU_FOLDER);
-  create_bindings (OpCompose, MENU_COMPOSE);
-  create_bindings (OpMain, MENU_MAIN);
-  create_bindings (OpPager, MENU_PAGER);
-  create_bindings (OpPost, MENU_POST);
-  create_bindings (OpQuery, MENU_QUERY);
-  create_bindings (OpAlias, MENU_ALIAS);
+  create_bindings (AttachDefaultBindings, MENU_ATTACH);
+  create_bindings (BrowserDefaultBindings, MENU_FOLDER);
+  create_bindings (ComposeDefaultBindings, MENU_COMPOSE);
+  create_bindings (ListDefaultBindings, MENU_LIST);
+  create_bindings (MainDefaultBindings, MENU_MAIN);
+  create_bindings (PagerDefaultBindings, MENU_PAGER);
+  create_bindings (PostDefaultBindings, MENU_POST);
+  create_bindings (QueryDefaultBindings, MENU_QUERY);
+  create_bindings (AliasDefaultBindings, MENU_ALIAS);
 
 
   if ((WithCrypto & APPLICATION_PGP))
-    create_bindings (OpPgp, MENU_PGP);
+    create_bindings (PgpDefaultBindings, MENU_PGP);
 
   if ((WithCrypto & APPLICATION_SMIME))
-    create_bindings (OpSmime, MENU_SMIME);
+    create_bindings (SmimeDefaultBindings, MENU_SMIME);
 
 #ifdef CRYPT_BACKEND_GPGME
-  create_bindings (OpPgp, MENU_KEY_SELECT_PGP);
-  create_bindings (OpSmime, MENU_KEY_SELECT_SMIME);
+  create_bindings (PgpDefaultBindings, MENU_KEY_SELECT_PGP);
+  create_bindings (SmimeDefaultBindings, MENU_KEY_SELECT_SMIME);
 #endif
 
 #ifdef MIXMASTER
-  create_bindings (OpMix, MENU_MIX);
-
-  km_bindkey ("<space>", MENU_MIX, OP_GENERIC_SELECT_ENTRY);
-  km_bindkey ("h", MENU_MIX, OP_MIX_CHAIN_PREV);
-  km_bindkey ("l", MENU_MIX, OP_MIX_CHAIN_NEXT);
+  create_bindings (MixDefaultBindings, MENU_MIX);
 #endif
 
 #ifdef USE_AUTOCRYPT
-  create_bindings (OpAutocryptAcct, MENU_AUTOCRYPT_ACCT);
+  create_bindings (AutocryptAcctDefaultBindings, MENU_AUTOCRYPT_ACCT);
 #endif
 
-  /* bindings for the line editor */
-  create_bindings (OpEditor, MENU_EDITOR);
+  create_bindings (EditorDefaultBindings, MENU_EDITOR);
 
-  km_bindkey ("<up>", MENU_EDITOR, OP_EDITOR_HISTORY_UP);
-  km_bindkey ("<down>", MENU_EDITOR, OP_EDITOR_HISTORY_DOWN);
-  km_bindkey ("<left>", MENU_EDITOR, OP_EDITOR_BACKWARD_CHAR);
-  km_bindkey ("<right>", MENU_EDITOR, OP_EDITOR_FORWARD_CHAR);
-  km_bindkey ("<home>", MENU_EDITOR, OP_EDITOR_BOL);
-  km_bindkey ("<end>", MENU_EDITOR, OP_EDITOR_EOL);
-  km_bindkey ("<backspace>", MENU_EDITOR, OP_EDITOR_BACKSPACE);
-  km_bindkey ("<delete>", MENU_EDITOR, OP_EDITOR_BACKSPACE);
-  km_bindkey ("\177", MENU_EDITOR, OP_EDITOR_BACKSPACE);
-
-  /* generic menu keymap */
-  create_bindings (OpGeneric, MENU_GENERIC);
-
-  km_bindkey ("<home>", MENU_GENERIC, OP_FIRST_ENTRY);
-  km_bindkey ("<end>", MENU_GENERIC, OP_LAST_ENTRY);
-  km_bindkey ("<pagedown>", MENU_GENERIC, OP_NEXT_PAGE);
-  km_bindkey ("<pageup>", MENU_GENERIC, OP_PREV_PAGE);
-  km_bindkey ("<right>", MENU_GENERIC, OP_NEXT_PAGE);
-  km_bindkey ("<left>", MENU_GENERIC, OP_PREV_PAGE);
-  km_bindkey ("<up>", MENU_GENERIC, OP_PREV_ENTRY);
-  km_bindkey ("<down>", MENU_GENERIC, OP_NEXT_ENTRY);
-  km_bindkey ("1", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("2", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("3", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("4", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("5", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("6", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("7", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("8", MENU_GENERIC, OP_JUMP);
-  km_bindkey ("9", MENU_GENERIC, OP_JUMP);
-
-  km_bindkey ("<enter>", MENU_GENERIC, OP_GENERIC_SELECT_ENTRY);
-
-  /* Miscellaneous extra bindings */
-
-  km_bindkey (" ", MENU_MAIN, OP_DISPLAY_MESSAGE);
-  km_bindkey ("<up>", MENU_MAIN, OP_MAIN_PREV_UNDELETED);
-  km_bindkey ("<down>", MENU_MAIN, OP_MAIN_NEXT_UNDELETED);
-  km_bindkey ("J", MENU_MAIN, OP_NEXT_ENTRY);
-  km_bindkey ("K", MENU_MAIN, OP_PREV_ENTRY);
-  km_bindkey ("x", MENU_MAIN, OP_EXIT);
-
-  km_bindkey ("<enter>", MENU_MAIN, OP_DISPLAY_MESSAGE);
-
-  km_bindkey ("x", MENU_PAGER, OP_EXIT);
-  km_bindkey ("i", MENU_PAGER, OP_EXIT);
-  km_bindkey ("<backspace>", MENU_PAGER, OP_PREV_LINE);
-  km_bindkey ("<pagedown>", MENU_PAGER, OP_NEXT_PAGE);
-  km_bindkey ("<pageup>", MENU_PAGER, OP_PREV_PAGE);
-  km_bindkey ("<up>", MENU_PAGER, OP_MAIN_PREV_UNDELETED);
-  km_bindkey ("<right>", MENU_PAGER, OP_MAIN_NEXT_UNDELETED);
-  km_bindkey ("<down>", MENU_PAGER, OP_MAIN_NEXT_UNDELETED);
-  km_bindkey ("<left>", MENU_PAGER, OP_MAIN_PREV_UNDELETED);
-  km_bindkey ("<home>", MENU_PAGER, OP_PAGER_TOP);
-  km_bindkey ("<end>", MENU_PAGER, OP_PAGER_BOTTOM);
-  km_bindkey ("1", MENU_PAGER, OP_JUMP);
-  km_bindkey ("2", MENU_PAGER, OP_JUMP);
-  km_bindkey ("3", MENU_PAGER, OP_JUMP);
-  km_bindkey ("4", MENU_PAGER, OP_JUMP);
-  km_bindkey ("5", MENU_PAGER, OP_JUMP);
-  km_bindkey ("6", MENU_PAGER, OP_JUMP);
-  km_bindkey ("7", MENU_PAGER, OP_JUMP);
-  km_bindkey ("8", MENU_PAGER, OP_JUMP);
-  km_bindkey ("9", MENU_PAGER, OP_JUMP);
-
-  km_bindkey ("<enter>", MENU_PAGER, OP_NEXT_LINE);
-
-  km_bindkey ("<return>", MENU_ALIAS, OP_GENERIC_SELECT_ENTRY);
-  km_bindkey ("<enter>",  MENU_ALIAS, OP_GENERIC_SELECT_ENTRY);
-  km_bindkey ("<space>", MENU_ALIAS, OP_TAG);
-
-  km_bindkey ("<enter>", MENU_ATTACH, OP_VIEW_ATTACH);
-  km_bindkey ("<enter>", MENU_COMPOSE, OP_VIEW_ATTACH);
-
-  /* edit-to (default "t") hides generic tag-entry in Compose menu
-     This will bind tag-entry to  "T" in the Compose menu */
-  km_bindkey ("T", MENU_COMPOSE, OP_TAG);
+  create_bindings (GenericDefaultBindings, MENU_GENERIC);
 }
 
 void km_error_key (int menu)
@@ -934,6 +858,7 @@ static char *parse_keymap (int *menu, BUFFER *s, int maxmenus, int *nummenus, BU
   char *p, *q;
 
   mutt_buffer_init (&buf);
+  mutt_buffer_increase_size (&buf, STRING);
 
   /* menu name */
   mutt_extract_token (&buf, s, 0);
@@ -978,7 +903,7 @@ error:
 }
 
 static int
-try_bind (char *key, int menu, char *func, const struct binding_t *bindings)
+try_bind (char *key, int menu, char *func, const struct menu_func_op_t *bindings)
 {
   int i;
 
@@ -991,7 +916,7 @@ try_bind (char *key, int menu, char *func, const struct binding_t *bindings)
   return (-1);
 }
 
-const struct binding_t *km_get_table (int menu)
+const struct menu_func_op_t *km_get_table (int menu)
 {
   switch (menu)
   {
@@ -1015,6 +940,8 @@ const struct binding_t *km_get_table (int menu)
       return OpEditor;
     case MENU_QUERY:
       return OpQuery;
+    case MENU_LIST:
+      return OpList;
 
     case MENU_PGP:
       return (WithCrypto & APPLICATION_PGP)? OpPgp:NULL;
@@ -1043,7 +970,7 @@ const struct binding_t *km_get_table (int menu)
 /* bind menu-name '<key_sequence>' function-name */
 int mutt_parse_bind (BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFER *err)
 {
-  const struct binding_t *bindings = NULL;
+  const struct menu_func_op_t *bindings = NULL;
   char *key;
   int menu[sizeof(Menus)/sizeof(struct mapping_t)-1], r = 0, nummenus, i;
 
@@ -1144,7 +1071,7 @@ int mutt_parse_exec (BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFER 
 {
   int ops[128];
   int nops = 0;
-  const struct binding_t *bindings = NULL;
+  const struct menu_func_op_t *bindings = NULL;
   char *function;
 
   if (!MoreArgs (s))
@@ -1163,8 +1090,12 @@ int mutt_parse_exec (BUFFER *buf, BUFFER *s, union pointer_long_t udata, BUFFER 
       bindings = OpGeneric;
 
     ops[nops] = get_op (bindings, function, mutt_strlen(function));
-    if (ops[nops] == OP_NULL && CurrentMenu != MENU_PAGER)
+    if (ops[nops] == OP_NULL &&
+        CurrentMenu != MENU_PAGER &&
+        CurrentMenu != MENU_GENERIC)
+    {
       ops[nops] = get_op (OpGeneric, function, mutt_strlen(function));
+    }
 
     if (ops[nops] == OP_NULL)
     {

@@ -7,12 +7,12 @@ Subject: Muttrc
 
 Signed-off-by: Matteo F. Vescovi <mfvescovi@gmail.com>
 ---
- doc/Muttrc.head | 41 ++++++++++++++++++++++++++++++++++-------
- 1 file changed, 34 insertions(+), 7 deletions(-)
+ doc/Muttrc.head |   39 +++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 37 insertions(+), 2 deletions(-)
 
 --- a/doc/Muttrc.head
 +++ b/doc/Muttrc.head
-@@ -12,6 +12,34 @@
+@@ -12,6 +12,34 @@ unignore from: subject to cc date x-mail
  # Display the fields in this order
  hdr_order date from to cc subject
  
@@ -47,7 +47,7 @@ Signed-off-by: Matteo F. Vescovi <mfvescovi@gmail.com>
  # imitate the old search-body function
  macro index \eb "<search>~b " "search in message bodies"
  
-@@ -23,7 +51,7 @@
+@@ -23,7 +51,7 @@ macro index,pager,attach,compose \cb "\
  "call urlview to extract URLs out of a message"
  
  # Show documentation when pressing F1
@@ -56,7 +56,7 @@ Signed-off-by: Matteo F. Vescovi <mfvescovi@gmail.com>
  
  # show the incoming mailboxes list (just like "mutt -y") and back when pressing "y"
  # note: these macros have been subsumed by the <browse-mailboxes> function.
-@@ -37,7 +65,7 @@
+@@ -37,7 +65,7 @@ bind browser y exit
  # append-hook '\.gz$'  "gzip -c   '%t' >> '%f'"
  
  # If Mutt is unable to determine your site's domain name correctly, you can
@@ -65,7 +65,7 @@ Signed-off-by: Matteo F. Vescovi <mfvescovi@gmail.com>
  #
  # set hostname=cs.hmc.edu
  
-@@ -49,6 +77,13 @@
+@@ -49,6 +77,13 @@ bind browser y exit
  # be undone with unmime_lookup.
  mime_lookup application/octet-stream
  

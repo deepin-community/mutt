@@ -46,9 +46,7 @@
 
 #include <gpgme.h>
 
-#ifdef HAVE_LOCALE_H
 #include <locale.h>
-#endif
 #ifdef HAVE_LANGINFO_D_T_FMT
 #include <langinfo.h>
 #endif
@@ -714,7 +712,7 @@ cleanup:
 /* Create a GPGME data object from the stream FP but limit the object
    to LENGTH bytes starting at OFFSET bytes from the beginning of the
    file. */
-static gpgme_data_t file_to_data_object (FILE *fp, long offset, long length)
+static gpgme_data_t file_to_data_object (FILE *fp, LOFF_T offset, long length)
 {
   int err = 0;
   gpgme_data_t data;
@@ -917,7 +915,7 @@ static gpgme_key_t *create_recipient_set (const char *keylist, int use_smime)
             buf[i-1] = 0;
 
             err = gpgme_get_key (context, buf, &key, 0);
-            if (! err)
+            if (! err && key->uids)
               key->uids->validity = GPGME_VALIDITY_FULL;
             buf[i-1] = '!';
           }
@@ -2115,7 +2113,6 @@ int pgp_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
   BODY *first_part = b;
   int is_signed = 0;
   int need_decode = 0;
-  int saved_type;
   LOFF_T saved_offset;
   size_t saved_length;
   FILE *decoded_fp = NULL;
@@ -2146,7 +2143,6 @@ int pgp_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
 
   if (need_decode)
   {
-    saved_type = b->type;
     saved_offset = b->offset;
     saved_length = b->length;
 
@@ -2159,7 +2155,7 @@ int pgp_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
     }
     unlink (mutt_b2s (tempfile));
 
-    fseeko (s.fpin, b->offset, 0);
+    fseeko (s.fpin, b->offset, SEEK_SET);
     s.fpout = decoded_fp;
 
     mutt_decode_attachment (b, &s);
@@ -2198,7 +2194,6 @@ bail:
 
   if (need_decode)
   {
-    b->type = saved_type;
     b->length = saved_length;
     b->offset = saved_offset;
     safe_fclose (&decoded_fp);
@@ -2218,7 +2213,6 @@ int smime_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
   int is_signed;
   LOFF_T saved_b_offset;
   size_t saved_b_length;
-  int saved_b_type;
 
   if (!mutt_is_application_smime (b))
     return -1;
@@ -2233,12 +2227,11 @@ int smime_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
      backend.  The backend allows for Base64 encoded data but it does
      not allow for QP which I have seen in some messages.  So better
      do it here. */
-  saved_b_type = b->type;
   saved_b_offset = b->offset;
   saved_b_length = b->length;
   memset (&s, 0, sizeof (s));
   s.fpin = fpin;
-  fseeko (s.fpin, b->offset, 0);
+  fseeko (s.fpin, b->offset, SEEK_SET);
   mutt_buffer_mktemp (tempfile);
   if (!(tmpfp = safe_fopen (mutt_b2s (tempfile), "w+")))
     {
@@ -2268,7 +2261,6 @@ int smime_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
   *cur = decrypt_part (b, &s, *fpout, 1, &is_signed);
   if (*cur)
     (*cur)->goodsig = is_signed > 0;
-  b->type = saved_b_type;
   b->length = saved_b_length;
   b->offset = saved_b_offset;
   safe_fclose (&tmpfp);
@@ -2287,12 +2279,11 @@ int smime_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
       BODY *bb = *cur;
       BODY *tmp_b;
 
-      saved_b_type = bb->type;
       saved_b_offset = bb->offset;
       saved_b_length = bb->length;
       memset (&s, 0, sizeof (s));
       s.fpin = *fpout;
-      fseeko (s.fpin, bb->offset, 0);
+      fseeko (s.fpin, bb->offset, SEEK_SET);
       mutt_buffer_mktemp (tempfile);
       if (!(tmpfp = safe_fopen (mutt_b2s (tempfile), "w+")))
         {
@@ -2323,7 +2314,6 @@ int smime_gpgme_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
       tmp_b = decrypt_part (bb, &s, *fpout, 1, &is_signed);
       if (tmp_b)
         tmp_b->goodsig = is_signed > 0;
-      bb->type = saved_b_type;
       bb->length = saved_b_length;
       bb->offset = saved_b_offset;
       safe_fclose (&tmpfp);
@@ -2356,7 +2346,7 @@ static int pgp_gpgme_extract_keys (gpgme_data_t keydata, FILE** fp)
   gpgme_user_id_t uid;
   gpgme_subkey_t subkey;
   const char* shortid;
-  int len;
+  size_t len;
   char date[STRING];
   int more;
   int rc = -1;
@@ -2396,6 +2386,12 @@ static int pgp_gpgme_extract_keys (gpgme_data_t keydata, FILE** fp)
       dprint (1, (debugfile, "Error setting GPGME context home\n"));
       goto err_tmpdir;
     }
+
+    if ((err = gpgme_op_import (tmpctx, keydata)) != GPG_ERR_NO_ERROR)
+    {
+      dprint (1, (debugfile, "Error importing key\n"));
+      goto err_tmpdir;
+    }
   }
 
   tmpfile = mutt_buffer_pool_get ();
@@ -2432,14 +2428,18 @@ static int pgp_gpgme_extract_keys (gpgme_data_t keydata, FILE** fp)
       tt = subkey->timestamp;
       strftime (date, sizeof (date), "%Y-%m-%d", localtime (&tt));
 
+      fprintf (*fp, "%s %5.5s %d/%8s %s\n",
+               more ? "sub" : "pub",
+               gpgme_pubkey_algo_name (subkey->pubkey_algo), subkey->length,
+               shortid, date);
       if (!more)
-        fprintf (*fp, "%s %5.5s %d/%8s %s %s\n", more ? "sub" : "pub",
-                 gpgme_pubkey_algo_name (subkey->pubkey_algo), subkey->length,
-                 shortid, date, uid->uid);
-      else
-        fprintf (*fp, "%s %5.5s %d/%8s %s\n", more ? "sub" : "pub",
-                 gpgme_pubkey_algo_name (subkey->pubkey_algo), subkey->length,
-                 shortid, date);
+      {
+        while (uid)
+        {
+          fprintf (*fp, "uid %s\n", NONULL (uid->uid));
+          uid = uid->next;
+        }
+      }
       subkey = subkey->next;
       more = 1;
     }
@@ -2756,8 +2756,7 @@ int pgp_gpgme_application_handler (BODY *m, STATE *s)
 {
   int needpass = -1, pgp_keyblock = 0;
   int clearsign = 0;
-  long bytes;
-  LOFF_T last_pos, offset, block_begin, block_end;
+  LOFF_T bytes, last_pos, offset, block_begin, block_end;
   char buf[HUGE_STRING];
   FILE *pgpout = NULL;
 
@@ -2778,7 +2777,7 @@ int pgp_gpgme_application_handler (BODY *m, STATE *s)
   if (!mutt_get_body_charset (body_charset, sizeof (body_charset), m))
     strfcpy (body_charset, "iso-8859-1", sizeof body_charset);
 
-  fseeko (s->fpin, m->offset, 0);
+  fseeko (s->fpin, m->offset, SEEK_SET);
   last_pos = m->offset;
 
   for (bytes = m->length; bytes > 0;)
@@ -2849,7 +2848,7 @@ int pgp_gpgme_application_handler (BODY *m, STATE *s)
           /* Copy PGP material to an data container */
 	  armored_data = file_to_data_object (s->fpin, block_begin,
                                               block_end - block_begin);
-          fseeko (s->fpin, block_end, 0);
+          fseeko (s->fpin, block_end, SEEK_SET);
 
           /* Invoke PGP if needed */
           if (pgp_keyblock)
@@ -3489,9 +3488,9 @@ static int _crypt_compare_address (const void *a, const void *b)
   int r;
 
   if ((r = mutt_strcasecmp ((*s)->uid, (*t)->uid)))
-    return r > 0;
+    return r;
   else
-    return mutt_strcasecmp (crypt_fpr_or_lkeyid (*s), crypt_fpr_or_lkeyid (*t)) > 0;
+    return mutt_strcasecmp (crypt_fpr_or_lkeyid (*s), crypt_fpr_or_lkeyid (*t));
 }
 
 static int crypt_compare_address (const void *a, const void *b)
@@ -3509,9 +3508,9 @@ static int _crypt_compare_keyid (const void *a, const void *b)
   int r;
 
   if ((r = mutt_strcasecmp (crypt_fpr_or_lkeyid (*s), crypt_fpr_or_lkeyid (*t))))
-    return r > 0;
+    return r;
   else
-    return mutt_strcasecmp ((*s)->uid, (*t)->uid) > 0;
+    return mutt_strcasecmp ((*s)->uid, (*t)->uid);
 }
 
 static int crypt_compare_keyid (const void *a, const void *b)
@@ -3535,9 +3534,9 @@ static int _crypt_compare_date (const void *a, const void *b)
   if (ts > tt)
     return 1;
   if (ts < tt)
-    return 0;
+    return -1;
 
-  return mutt_strcasecmp ((*s)->uid, (*t)->uid) > 0;
+  return mutt_strcasecmp ((*s)->uid, (*t)->uid);
 }
 
 static int crypt_compare_date (const void *a, const void *b)
@@ -3555,34 +3554,35 @@ static int _crypt_compare_trust (const void *a, const void *b)
   unsigned long ts = 0, tt = 0;
   int r;
 
-  if ((r = (((*s)->flags & (KEYFLAG_RESTRICTIONS))
-	    - ((*t)->flags & (KEYFLAG_RESTRICTIONS)))))
-    return r > 0;
+  if ((r = mutt_numeric_cmp (((*s)->flags & (KEYFLAG_RESTRICTIONS)),
+                             ((*t)->flags & (KEYFLAG_RESTRICTIONS)))))
+    return r;
 
-  ts = (*s)->validity;
-  tt = (*t)->validity;
-  if ((r = (tt - ts)))
-    return r < 0;
+  /* Note: reversed */
+  if ((r = mutt_numeric_cmp ((*t)->validity, (*s)->validity)))
+    return r;
 
+  ts = tt = 0;
   if ((*s)->kobj->subkeys)
     ts = (*s)->kobj->subkeys->length;
   if ((*t)->kobj->subkeys)
     tt = (*t)->kobj->subkeys->length;
-  if (ts != tt)
-    return ts > tt;
+  /* Note: reversed */
+  if ((r = mutt_numeric_cmp (tt, ts)))
+      return r;
 
+  ts = tt = 0;
   if ((*s)->kobj->subkeys && ((*s)->kobj->subkeys->timestamp > 0))
     ts = (*s)->kobj->subkeys->timestamp;
   if ((*t)->kobj->subkeys && ((*t)->kobj->subkeys->timestamp > 0))
     tt = (*t)->kobj->subkeys->timestamp;
-  if (ts > tt)
-    return 1;
-  if (ts < tt)
-    return 0;
+  /* Note: reversed: */
+  if ((r = mutt_numeric_cmp (tt, ts)))
+    return r;
 
   if ((r = mutt_strcasecmp ((*s)->uid, (*t)->uid)))
-    return r > 0;
-  return (mutt_strcasecmp (crypt_fpr_or_lkeyid ((*s)), crypt_fpr_or_lkeyid ((*t)))) > 0;
+    return r;
+  return mutt_strcasecmp (crypt_fpr_or_lkeyid (*s), crypt_fpr_or_lkeyid (*t));
 }
 
 static int crypt_compare_trust (const void *a, const void *b)
@@ -4722,7 +4722,7 @@ static crypt_key_t *crypt_getkeybyaddr (ADDRESS * a, short abilities,
   *forced_valid = 0;
 
   if (a && a->mailbox)
-    hints = crypt_add_string_to_hints (hints, a->mailbox);
+    hints = mutt_add_list (hints, a->mailbox);
   if (a && a->personal)
     hints = crypt_add_string_to_hints (hints, a->personal);
 
@@ -4735,8 +4735,8 @@ static crypt_key_t *crypt_getkeybyaddr (ADDRESS * a, short abilities,
   if (!keys)
     return NULL;
 
-  dprint (5, (debugfile, "crypt_getkeybyaddr: looking for %s <%s>.",
-	      a->personal, a->mailbox));
+  dprint (5, (debugfile, "crypt_getkeybyaddr: looking for %s <%s>.\n",
+	      NONULL (a->personal), NONULL (a->mailbox)));
 
   for (k = keys; k; k = k->next)
     {
@@ -4997,7 +4997,7 @@ static char *find_keys (ADDRESS *adrlist, unsigned int app, int oppenc_mode)
               {
                 snprintf (buf, sizeof (buf), _("Use keyID = \"%s\" for %s?"),
                           crypt_hook_val, p->mailbox);
-                r = mutt_yesorno (buf, MUTT_YES);
+                r = mutt_query_boolean (OPTCRYPTCONFIRMHOOK, buf, MUTT_YES);
               }
             if (r == MUTT_YES)
               {

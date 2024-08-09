@@ -27,9 +27,7 @@
 
 # include <stdio.h>
 # include <string.h>
-# ifdef HAVE_UNISTD_H
-#  include <unistd.h> /* needed for SEEK_SET */
-# endif
+# include <unistd.h> /* needed for SEEK_SET */
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <time.h>
@@ -42,7 +40,7 @@
 # endif
 
 # ifdef ENABLE_NLS
-#  include <libintl.h>
+#  include "gettext.h"
 # define _(a) (gettext (a))
 #  ifdef gettext_noop
 #   define N_(a) gettext_noop (a)
@@ -77,12 +75,22 @@
 # define FREE(x) safe_free(x)
 # define NONULL(x) x?x:""
 # define ISSPACE(c) isspace((unsigned char)c)
-# define strfcpy(A,B,C) strncpy(A,B,C), *(A+(C)-1)=0
+
+#ifdef HAVE_MEMCCPY
+# define strfcpy(A,B,C) memccpy(A,B,0,(C)-1), *((A)+(C)-1)=0
+#else
+/* Note it would be technically more correct to strncpy with length
+ * (C)-1, as above.  But this tickles more compiler warnings.
+ */
+# define strfcpy(A,B,C) strncpy(A,B,C), *((A)+(C)-1)=0
+#endif
 
 # undef MAX
 # undef MIN
 # define MAX(a,b) ((a) < (b) ? (b) : (a))
 # define MIN(a,b) ((a) < (b) ? (a) : (b))
+
+#define mutt_numeric_cmp(a,b) ((a) < (b) ? -1 : ((a) > (b) ? 1 : 0))
 
 /* Use this with care.  If the compiler can't see the array
  * definition, it obviously won't produce a correct result. */
@@ -149,12 +157,17 @@ MUTT_LIB_WHERE FILE *debugfile;
 MUTT_LIB_WHERE int debuglevel;
 
 void mutt_debug (FILE *, const char *, ...);
+void mutt_debug_f (const char *, const int, const char *, const char *, ...);
 
 #  define dprint(N,X) do { if (debuglevel>=N && debugfile) mutt_debug X; } while (0)
+
+/* __func__ is a C99 provision, but we now require C99 so it's safe */
+#  define dprintf(N, ...) do { if (debuglevel >= (N)) mutt_debug_f (__FILE__, __LINE__, __func__, __VA_ARGS__); } while (0)
 
 # else
 
 #  define dprint(N,X) do { } while (0)
+#  define dprintf(N, ...) do { } while (0)
 
 # endif
 
@@ -166,6 +179,10 @@ void mutt_debug (FILE *, const char *, ...);
 /* Flags for mutt_read_line() */
 #define MUTT_CONT		(1<<0)		/* \-continuation */
 #define MUTT_EOL		(1<<1)		/* don't strip \n/\r\n */
+
+/* Flags for mutt_sanitize_filename() and mutt_buffer_sanitize_filename() */
+#define MUTT_SANITIZE_ALLOW_SLASH   (1<<0)
+#define MUTT_SANITIZE_ALLOW_8BIT    (1<<1)
 
 /* The actual library functions. */
 
@@ -179,18 +196,26 @@ char *safe_strcat (char *, size_t, const char *);
 char *safe_strncat (char *, size_t, const char *, size_t);
 char *safe_strdup (const char *);
 
+/* mutt_atoX() flags:
+ *
+ * Without the flag, the function will return -1, but the dst parameter
+ * will still be set to 0. */
+#define MUTT_ATOI_ALLOW_EMPTY     (1<<0)  /* allow NULL or "" */
+#define MUTT_ATOI_ALLOW_TRAILING  (1<<1)  /* allow values after the number */
+
 /* strtol() wrappers with range checking; they return
  * 	 0 success
  * 	-1 format error
- * 	-2 overflow (for int and short)
- * the int pointer may be NULL to test only without conversion
+ * 	-2 out of range
+ * the dst pointer may be NULL to test only without conversion
  */
-int mutt_atos (const char *, short *);
-int mutt_atoi (const char *, int *);
-int mutt_atol (const char *, long *);
-int mutt_atoui (const char *, unsigned int *);
-int mutt_atoul (const char *, unsigned long *);
-int mutt_atoull (const char *, unsigned long long *);
+int mutt_atos (const char *, short *, int);
+int mutt_atoi (const char *, int *, int);
+int mutt_atol (const char *, long *, int);
+int mutt_atoll (const char *, long long *, int);
+int mutt_atoui (const char *, unsigned int *, int);
+int mutt_atoul (const char *, unsigned long *, int);
+int mutt_atoull (const char *, unsigned long long *, int);
 
 const char *mutt_stristr (const char *, const char *);
 const char *mutt_basename (const char *);
@@ -214,7 +239,7 @@ void *safe_calloc (size_t, size_t);
 void *safe_malloc (size_t);
 void mutt_nocurses_error (const char *, ...);
 void mutt_remove_trailing_ws (char *);
-void mutt_sanitize_filename (char *, short);
+void mutt_sanitize_filename (char *, int flags);
 void mutt_str_replace (char **p, const char *s);
 int mutt_mkdir (char *path, mode_t mode);
 void mutt_str_adjust (char **p);

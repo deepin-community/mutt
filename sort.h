@@ -19,7 +19,6 @@
 #define SORT_DATE	1   /* the date the mail was sent. */
 #define SORT_SIZE	2
 #define SORT_SUBJECT	3
-#define SORT_ALPHA	3   /* makedoc.pl requires this */
 #define SORT_FROM	4
 #define SORT_ORDER	5   /* the order the messages appear in the mailbox. */
 #define SORT_THREADS	6
@@ -36,6 +35,8 @@
 #define SORT_FLAGGED	17
 #define SORT_PATH	18
 #define SORT_LABEL	19
+#define SORT_AUX        20  /* $sort_thread_groups delegation to $sort_aux */
+#define SORT_UID        21  /* used internally by the IMAP code */
 
 /* Sort and sort_aux are shorts, and are a composite of a
  * constant sort operation number and a set of compounded
@@ -63,8 +64,10 @@ int mutt_select_sort (int);
 THREAD *mutt_sort_subthreads (THREAD *, int);
 
 WHERE short BrowserSort INITVAL (SORT_SUBJECT);
+WHERE short BrowserSortMailboxes INITVAL (SORT_ORDER);
 WHERE short Sort INITVAL (SORT_DATE);
 WHERE short SortAux INITVAL (SORT_DATE); /* auxiliary sorting method */
+WHERE short SortThreadGroups INITVAL (SORT_AUX); /* thread roots sorting method */
 WHERE short SortAlias INITVAL (SORT_ALIAS);
 WHERE short SidebarSortMethod INITVAL (SORT_ORDER);
 

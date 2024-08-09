@@ -38,9 +38,7 @@
 #include <errno.h>
 #include <ctype.h>
 
-#ifdef HAVE_LOCALE_H
 #include <locale.h>
-#endif
 
 #ifdef HAVE_SYS_TIME_H
 # include <sys/time.h>
@@ -1404,7 +1402,8 @@ BODY *smime_build_smime_entity (BODY *a, char *certlist)
   char *cert_start, *cert_end;
   FILE *smimein = NULL, *smimeerr = NULL, *fpout = NULL, *fptmp = NULL;
   BODY *t = NULL;
-  int err = 0, empty, off;
+  int err = 0, empty;
+  size_t off;
   pid_t thepid;
 
   tempfile = mutt_buffer_pool_get ();
@@ -1754,14 +1753,11 @@ pid_t smime_invoke_decrypt (FILE **smimein, FILE **smimeout, FILE **smimeerr,
 int smime_verify_one (BODY *sigbdy, STATE *s, const char *tempfile)
 {
   BUFFER *signedfile = NULL, *smimeerrfile = NULL;
-  FILE *fp=NULL, *smimeout=NULL, *smimeerr=NULL;
+  FILE *smimeout=NULL, *smimeerr=NULL;
   pid_t thepid;
   int badsig = -1;
-
-  LOFF_T tmpoffset = 0;
-  size_t tmplength = 0;
-  int origType = sigbdy->type;
-  char *savePrefix = NULL;
+  FILE *s_fpout_save;
+  char *s_prefix_save;
 
   signedfile = mutt_buffer_pool_get ();
   smimeerrfile = mutt_buffer_pool_get ();
@@ -1769,47 +1765,31 @@ int smime_verify_one (BODY *sigbdy, STATE *s, const char *tempfile)
   mutt_buffer_printf (signedfile, "%s.sig", tempfile);
 
   /* decode to a tempfile, saving the original destination */
-  fp = s->fpout;
+  s_fpout_save = s->fpout;
   if ((s->fpout = safe_fopen (mutt_b2s (signedfile), "w")) == NULL)
   {
     mutt_perror (mutt_b2s (signedfile));
-    goto cleanup;
+    s->fpout = s_fpout_save;
+    goto signedfile_cleanup;
   }
-  /* decoding the attachment changes the size and offset, so save a copy
-   * of the "real" values now, and restore them after processing
-   */
-  tmplength = sigbdy->length;
-  tmpoffset = sigbdy->offset;
 
   /* if we are decoding binary bodies, we don't want to prefix each
    * line with the prefix or else the data will get corrupted.
    */
-  savePrefix = s->prefix;
+  s_prefix_save = s->prefix;
   s->prefix = NULL;
 
   mutt_decode_attachment (sigbdy, s);
 
-  sigbdy->length = ftello (s->fpout);
-  sigbdy->offset = 0;
+  s->prefix = s_prefix_save;
   safe_fclose (&s->fpout);
-
-  /* restore final destination and substitute the tempfile for input */
-  s->fpout = fp;
-  fp = s->fpin;
-  s->fpin = fopen (mutt_b2s (signedfile), "r");
-
-  /* restore the prefix */
-  s->prefix = savePrefix;
-
-  sigbdy->type = origType;
-
+  s->fpout = s_fpout_save;
 
   mutt_buffer_mktemp (smimeerrfile);
   if (!(smimeerr = safe_fopen (mutt_b2s (smimeerrfile), "w+")))
   {
     mutt_perror (mutt_b2s (smimeerrfile));
-    mutt_unlink (mutt_b2s (signedfile));
-    goto cleanup;
+    goto errfile_cleanup;
   }
 
   crypt_current_time (s, "OpenSSL");
@@ -1847,17 +1827,12 @@ int smime_verify_one (BODY *sigbdy, STATE *s, const char *tempfile)
 
   state_attach_puts (_("[-- End of OpenSSL output --]\n\n"), s);
 
-  mutt_unlink (mutt_b2s (signedfile));
   mutt_unlink (mutt_b2s (smimeerrfile));
 
-  sigbdy->length = tmplength;
-  sigbdy->offset = tmpoffset;
+errfile_cleanup:
+  mutt_unlink (mutt_b2s (signedfile));
 
-  /* restore the original source stream */
-  safe_fclose (&s->fpin);
-  s->fpin = fp;
-
-cleanup:
+signedfile_cleanup:
   mutt_buffer_pool_release (&signedfile);
   mutt_buffer_pool_release (&smimeerrfile);
   return badsig;
@@ -1874,7 +1849,7 @@ cleanup:
 
 static BODY *smime_handle_entity (BODY *m, STATE *s, FILE *outFile)
 {
-  int len=0;
+  size_t len=0;
   int c;
   char buf[HUGE_STRING];
   BUFFER *outfile = NULL, *errfile = NULL, *tmpfname = NULL;
@@ -1915,7 +1890,7 @@ static BODY *smime_handle_entity (BODY *m, STATE *s, FILE *outFile)
     goto cleanup;
   }
 
-  fseeko (s->fpin, m->offset, 0);
+  fseeko (s->fpin, m->offset, SEEK_SET);
 
   mutt_copy_bytes (s->fpin, tmpfp,  m->length);
 
@@ -2128,7 +2103,6 @@ int smime_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
   STATE s;
   LOFF_T tmpoffset = b->offset;
   size_t tmplength = b->length;
-  int origType = b->type;
   FILE *tmpfp=NULL;
   int rv = -1;
 
@@ -2142,7 +2116,7 @@ int smime_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
 
   memset (&s, 0, sizeof (s));
   s.fpin = fpin;
-  fseeko (s.fpin, b->offset, 0);
+  fseeko (s.fpin, b->offset, SEEK_SET);
 
   tempfile = mutt_buffer_pool_get ();
   mutt_buffer_mktemp (tempfile);
@@ -2181,7 +2155,6 @@ int smime_decrypt_mime (FILE *fpin, FILE **fpout, BODY *b, BODY **cur)
   (*cur)->badsig  = b->badsig;
 
 bail:
-  b->type = origType;
   b->length = tmplength;
   b->offset = tmpoffset;
   safe_fclose (&tmpfp);

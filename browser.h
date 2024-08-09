@@ -30,6 +30,7 @@ struct folder_file
 
   char *display_name;
   char *full_path;
+  int number;              /* used for unordered sorting */
 
   short new;               /* true if mailbox has "new mail" */
   int msg_count;           /* total number of messages */
@@ -52,6 +53,7 @@ struct browser_state
   struct folder_file *entry;
   unsigned int entrylen;	/* number of real entries */
   unsigned int entrymax;	/* max entry */
+  unsigned int buffy : 1;
 #ifdef USE_IMAP
   short imap_browse;
   char *folder;

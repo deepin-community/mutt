@@ -3,11 +3,6 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
-/* Define to one of `_getb67', `GETB67', `getb67' for Cray-2 and Cray-YMP
-   systems. This function is required for `alloca.c' support on those systems.
-   */
-#undef CRAY_STACKSEG_END
-
 /* Define if you want classic PGP support. */
 #undef CRYPT_BACKEND_CLASSIC_PGP
 
@@ -16,9 +11,6 @@
 
 /* Defined, if GPGME support is enabled */
 #undef CRYPT_BACKEND_GPGME
-
-/* Define to 1 if using `alloca.c'. */
-#undef C_ALLOCA
 
 /* Define to enable debugging info. */
 #undef DEBUG
@@ -40,24 +32,25 @@
 /* program to use for shell commands */
 #undef EXECSHELL
 
-/* Define to 1 if you have `alloca', as a function or macro. */
-#undef HAVE_ALLOCA
-
-/* Define to 1 if you have <alloca.h> and it should be used (not on Ultrix).
-   */
-#undef HAVE_ALLOCA_H
-
-/* Define to 1 if you have the <argz.h> header file. */
-#undef HAVE_ARGZ_H
-
 /* Define to 1 if you have the `bind_textdomain_codeset' function. */
 #undef HAVE_BIND_TEXTDOMAIN_CODESET
 
 /* Define if you have bkgdset, as a function or macro. */
 #undef HAVE_BKGDSET
 
+/* Define if you have bkgrndset, as a function or macro. */
+#undef HAVE_BKGRNDSET
+
 /* Define if you have the C99 integer types */
 #undef HAVE_C99_INTTYPES
+
+/* Define to 1 if you have the Mac OS X function
+   CFLocaleCopyPreferredLanguages in the CoreFoundation framework. */
+#undef HAVE_CFLOCALECOPYPREFERREDLANGUAGES
+
+/* Define to 1 if you have the Mac OS X function CFPreferencesCopyAppValue in
+   the CoreFoundation framework. */
+#undef HAVE_CFPREFERENCESCOPYAPPVALUE
 
 /* Define to 1 if you have the `clock_gettime' function. */
 #undef HAVE_CLOCK_GETTIME
@@ -71,7 +64,8 @@
 /* Berkeley DB4 Support */
 #undef HAVE_DB4
 
-/* Define to 1 if you have the `dcgettext' function. */
+/* Define if the GNU dcgettext() function is already present or preinstalled.
+   */
 #undef HAVE_DCGETTEXT
 
 /* Define to 1 if you have the declaration of
@@ -95,9 +89,6 @@
 
 /* Define to 1 if you have the `fchdir' function. */
 #undef HAVE_FCHDIR
-
-/* Define to 1 if you have the `feof_unlocked' function. */
-#undef HAVE_FEOF_UNLOCKED
 
 /* Define to 1 if you have the `fgetc_unlocked' function. */
 #undef HAVE_FGETC_UNLOCKED
@@ -123,32 +114,14 @@
 /* Define to 1 if you have the `getaddrinfo' function. */
 #undef HAVE_GETADDRINFO
 
-/* Define to 1 if you have the `getcwd' function. */
-#undef HAVE_GETCWD
-
-/* Define to 1 if you have the `getegid' function. */
-#undef HAVE_GETEGID
-
-/* Define to 1 if you have the `geteuid' function. */
-#undef HAVE_GETEUID
-
-/* Define to 1 if you have the `getgid' function. */
-#undef HAVE_GETGID
-
 /* Define to 1 if you have the <getopt.h> header file. */
 #undef HAVE_GETOPT_H
-
-/* Define to 1 if you have the `getpagesize' function. */
-#undef HAVE_GETPAGESIZE
 
 /* Define to 1 if you have the `getsid' function. */
 #undef HAVE_GETSID
 
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
-
-/* Define to 1 if you have the `getuid' function. */
-#undef HAVE_GETUID
 
 /* Define to 1 if the system has the type `gnutls_certificate_credentials_t'.
    */
@@ -178,7 +151,7 @@
 /* Define if your GSSAPI implementation is Heimdal */
 #undef HAVE_HEIMDAL
 
-/* Define if you have the iconv() function. */
+/* Define if you have the iconv() function and it works. */
 #undef HAVE_ICONV
 
 /* Define to 1 if you have the <iconv.h> header file. */
@@ -283,8 +256,8 @@
 /* Define if you have <langinfo.h> and nl_langinfo(YESEXPR). */
 #undef HAVE_LANGINFO_YESEXPR
 
-/* Define if your <locale.h> file defines LC_MESSAGES. */
-#undef HAVE_LC_MESSAGES
+/* Define to 1 if you have the `gsasl' library (-lgsasl). */
+#undef HAVE_LIBGSASL
 
 /* Define to 1 if you have the GNU idn library */
 #undef HAVE_LIBIDN
@@ -313,41 +286,26 @@
 /* Define to 1 if you have the `x' library (-lx). */
 #undef HAVE_LIBX
 
-/* Define to 1 if you have the <limits.h> header file. */
-#undef HAVE_LIMITS_H
-
 /* LMDB Support */
 #undef HAVE_LMDB
-
-/* Define to 1 if you have the <locale.h> header file. */
-#undef HAVE_LOCALE_H
 
 /* Define to 1 if the system has the type `long long int'. */
 #undef HAVE_LONG_LONG_INT
 
-/* Define to 1 if you have the <malloc.h> header file. */
-#undef HAVE_MALLOC_H
+/* Define to 1 if you have the `memccpy' function. */
+#undef HAVE_MEMCCPY
 
 /* Define to 1 if you have the `memmove' function. */
 #undef HAVE_MEMMOVE
 
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
-
-/* Define to 1 if you have the `mempcpy' function. */
-#undef HAVE_MEMPCPY
-
 /* Define if you have meta, as a function or macro. */
 #undef HAVE_META
 
+/* Define to 1 if you have the <minix/config.h> header file. */
+#undef HAVE_MINIX_CONFIG_H
+
 /* Define to 1 if you have the `mkdtemp' function. */
 #undef HAVE_MKDTEMP
-
-/* Define to 1 if you have a working `mmap' system call. */
-#undef HAVE_MMAP
-
-/* Define to 1 if you have the `munmap' function. */
-#undef HAVE_MUNMAP
 
 /* Define to 1 if you have the <ncursesw/ncurses.h> header file. */
 #undef HAVE_NCURSESW_NCURSES_H
@@ -357,12 +315,6 @@
 
 /* Define to 1 if you have the <ncurses/ncurses.h> header file. */
 #undef HAVE_NCURSES_NCURSES_H
-
-/* Define to 1 if you have the <nl_types.h> header file. */
-#undef HAVE_NL_TYPES_H
-
-/* Define to 1 if you have the `putenv' function. */
-#undef HAVE_PUTENV
 
 /* QDBM Support */
 #undef HAVE_QDBM
@@ -376,20 +328,17 @@
 /* Define if you have resizeterm, as a function or macro. */
 #undef HAVE_RESIZETERM
 
+/* Define if you have setcchar, as a function or macro. */
+#undef HAVE_SETCCHAR
+
 /* Define to 1 if you have the `setegid' function. */
 #undef HAVE_SETEGID
 
 /* Define to 1 if you have the `setenv' function. */
 #undef HAVE_SETENV
 
-/* Define to 1 if you have the `setlocale' function. */
-#undef HAVE_SETLOCALE
-
 /* Define to 1 if you have the `setrlimit' function. */
 #undef HAVE_SETRLIMIT
-
-/* Define to 1 if you have a C99 compliant snprintf function. */
-#undef HAVE_SNPRINTF
 
 /* Define to 1 if you have the `srand48' function. */
 #undef HAVE_SRAND48
@@ -403,26 +352,20 @@
 /* Define to 1 if you have the <stdarg.h> header file. */
 #undef HAVE_STDARG_H
 
-/* Define to 1 if you have the <stddef.h> header file. */
-#undef HAVE_STDDEF_H
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
-
-/* Define to 1 if you have the `stpcpy' function. */
-#undef HAVE_STPCPY
 
 /* Define to 1 if you have the `strcasecmp' function. */
 #undef HAVE_STRCASECMP
 
 /* Define to 1 if you have the `strcasestr' function. */
 #undef HAVE_STRCASESTR
-
-/* Define to 1 if you have the `strchr' function. */
-#undef HAVE_STRCHR
 
 /* Define to 1 if you have the `strdup' function. */
 #undef HAVE_STRDUP
@@ -448,9 +391,6 @@
 /* Define to 1 if you have the `strtok_r' function. */
 #undef HAVE_STRTOK_R
 
-/* Define to 1 if you have the `strtoul' function. */
-#undef HAVE_STRTOUL
-
 /* Define to 1 if `st_atim.tv_nsec' is a member of `struct stat'. */
 #undef HAVE_STRUCT_STAT_ST_ATIM_TV_NSEC
 
@@ -472,9 +412,6 @@
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
 #undef HAVE_SYS_IOCTL_H
 
-/* Define to 1 if you have the <sys/param.h> header file. */
-#undef HAVE_SYS_PARAM_H
-
 /* Define to 1 if you have the <sys/resource.h> header file. */
 #undef HAVE_SYS_RESOURCE_H
 
@@ -493,14 +430,14 @@
 /* Tokyo Cabinet Support */
 #undef HAVE_TC
 
+/* Define to 1 if you have the <term.h> header file. */
+#undef HAVE_TERM_H
+
 /* Define to 1 if you have the `towlower' function. */
 #undef HAVE_TOWLOWER
 
 /* Define to 1 if you have the `towupper' function. */
 #undef HAVE_TOWUPPER
-
-/* Define to 1 if you have the `tsearch' function. */
-#undef HAVE_TSEARCH
 
 /* Define if you have typeahead, as a function or macro. */
 #undef HAVE_TYPEAHEAD
@@ -520,14 +457,14 @@
 /* Define to 1 if you have the `use_extended_names' function. */
 #undef HAVE_USE_EXTENDED_NAMES
 
+/* Define if you have use_tioctl, as a function or macro. */
+#undef HAVE_USE_TIOCTL
+
 /* Define to 1 if you have the `utimensat' function. */
 #undef HAVE_UTIMENSAT
 
 /* Define to 1 if you have the <villa.h> header file. */
 #undef HAVE_VILLA_H
-
-/* Define to 1 if you have a C99 compliant vsnprintf function. */
-#undef HAVE_VSNPRINTF
 
 /* Define to 1 if you have the <wchar.h> header file. */
 #undef HAVE_WCHAR_H
@@ -543,15 +480,6 @@
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #undef HAVE_ZLIB_H
-
-/* Define to 1 if you have the `__argz_count' function. */
-#undef HAVE___ARGZ_COUNT
-
-/* Define to 1 if you have the `__argz_next' function. */
-#undef HAVE___ARGZ_NEXT
-
-/* Define to 1 if you have the `__argz_stringify' function. */
-#undef HAVE___ARGZ_STRINGIFY
 
 /* Is mail spooled to the user's home directory? If defined, MAILPATH should
    be set to the filename of the spool mailbox relative the the home
@@ -629,15 +557,9 @@
 /* The size of `short', as computed by sizeof. */
 #undef SIZEOF_SHORT
 
-/* If using the C implementation of alloca, define if you know the
-   direction of stack growth for your system; otherwise it will be
-   automatically deduced at runtime.
-	STACK_DIRECTION > 0 => grows toward higher addresses
-	STACK_DIRECTION < 0 => grows toward lower addresses
-	STACK_DIRECTION = 0 => direction of growth unknown */
-#undef STACK_DIRECTION
-
-/* Define to 1 if you have the ANSI C header files. */
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
 
 /* Define to enable Sun mailtool attachments support. */
@@ -677,8 +599,15 @@
 /* Define if you want support for the POP3 protocol. */
 #undef USE_POP
 
-/* Define if want to use the SASL library for POP/IMAP authentication. */
+/* Define if want support for SASL. */
 #undef USE_SASL
+
+/* Define if want to use the Cyrus SASL library for POP/IMAP authentication.
+   */
+#undef USE_SASL_CYRUS
+
+/* Define if want to use the GNU SASL library for POP/IMAP authentication. */
+#undef USE_SASL_GNU
 
 /* Define if mutt should run setgid "mail". */
 #undef USE_SETGID
@@ -709,21 +638,87 @@
 #ifndef _ALL_SOURCE
 # undef _ALL_SOURCE
 #endif
+/* Enable general extensions on macOS.  */
+#ifndef _DARWIN_C_SOURCE
+# undef _DARWIN_C_SOURCE
+#endif
+/* Enable general extensions on Solaris.  */
+#ifndef __EXTENSIONS__
+# undef __EXTENSIONS__
+#endif
 /* Enable GNU extensions on systems that have them.  */
 #ifndef _GNU_SOURCE
 # undef _GNU_SOURCE
 #endif
-/* Enable threading extensions on Solaris.  */
+/* Enable X/Open compliant socket functions that do not require linking
+   with -lxnet on HP-UX 11.11.  */
+#ifndef _HPUX_ALT_XOPEN_SOCKET_API
+# undef _HPUX_ALT_XOPEN_SOCKET_API
+#endif
+/* Identify the host operating system as Minix.
+   This macro does not affect the system headers' behavior.
+   A future release of Autoconf may stop defining this macro.  */
+#ifndef _MINIX
+# undef _MINIX
+#endif
+/* Enable general extensions on NetBSD.
+   Enable NetBSD compatibility extensions on Minix.  */
+#ifndef _NETBSD_SOURCE
+# undef _NETBSD_SOURCE
+#endif
+/* Enable OpenBSD compatibility extensions on NetBSD.
+   Oddly enough, this does nothing on OpenBSD.  */
+#ifndef _OPENBSD_SOURCE
+# undef _OPENBSD_SOURCE
+#endif
+/* Define to 1 if needed for POSIX-compatible behavior.  */
+#ifndef _POSIX_SOURCE
+# undef _POSIX_SOURCE
+#endif
+/* Define to 2 if needed for POSIX-compatible behavior.  */
+#ifndef _POSIX_1_SOURCE
+# undef _POSIX_1_SOURCE
+#endif
+/* Enable POSIX-compatible threading on Solaris.  */
 #ifndef _POSIX_PTHREAD_SEMANTICS
 # undef _POSIX_PTHREAD_SEMANTICS
+#endif
+/* Enable extensions specified by ISO/IEC TS 18661-5:2014.  */
+#ifndef __STDC_WANT_IEC_60559_ATTRIBS_EXT__
+# undef __STDC_WANT_IEC_60559_ATTRIBS_EXT__
+#endif
+/* Enable extensions specified by ISO/IEC TS 18661-1:2014.  */
+#ifndef __STDC_WANT_IEC_60559_BFP_EXT__
+# undef __STDC_WANT_IEC_60559_BFP_EXT__
+#endif
+/* Enable extensions specified by ISO/IEC TS 18661-2:2015.  */
+#ifndef __STDC_WANT_IEC_60559_DFP_EXT__
+# undef __STDC_WANT_IEC_60559_DFP_EXT__
+#endif
+/* Enable extensions specified by ISO/IEC TS 18661-4:2015.  */
+#ifndef __STDC_WANT_IEC_60559_FUNCS_EXT__
+# undef __STDC_WANT_IEC_60559_FUNCS_EXT__
+#endif
+/* Enable extensions specified by ISO/IEC TS 18661-3:2015.  */
+#ifndef __STDC_WANT_IEC_60559_TYPES_EXT__
+# undef __STDC_WANT_IEC_60559_TYPES_EXT__
+#endif
+/* Enable extensions specified by ISO/IEC TR 24731-2:2010.  */
+#ifndef __STDC_WANT_LIB_EXT2__
+# undef __STDC_WANT_LIB_EXT2__
+#endif
+/* Enable extensions specified by ISO/IEC 24747:2009.  */
+#ifndef __STDC_WANT_MATH_SPEC_FUNCS__
+# undef __STDC_WANT_MATH_SPEC_FUNCS__
 #endif
 /* Enable extensions on HP NonStop.  */
 #ifndef _TANDEM_SOURCE
 # undef _TANDEM_SOURCE
 #endif
-/* Enable general extensions on Solaris.  */
-#ifndef __EXTENSIONS__
-# undef __EXTENSIONS__
+/* Enable X/Open extensions.  Define to 500 only if necessary
+   to make mbstate_t available.  */
+#ifndef _XOPEN_SOURCE
+# undef _XOPEN_SOURCE
 #endif
 
 
@@ -763,11 +758,6 @@ typedef unsigned long long uint64_t;
 #endif
   
 
-/* Enable large inode numbers on Mac OS X 10.5.  */
-#ifndef _DARWIN_USE_64_BIT_INODE
-# define _DARWIN_USE_64_BIT_INODE 1
-#endif
-
 /* Number of bits in a file offset, on hosts where this is settable. */
 #undef _FILE_OFFSET_BITS
 
@@ -776,16 +766,6 @@ typedef unsigned long long uint64_t;
 
 /* Define for large files, on AIX-style hosts. */
 #undef _LARGE_FILES
-
-/* Define to 1 if on MINIX. */
-#undef _MINIX
-
-/* Define to 2 if the system does not provide POSIX.1 features except with
-   this defined. */
-#undef _POSIX_1_SOURCE
-
-/* Define to 1 if you need to in order for `stat' and other things to work. */
-#undef _POSIX_SOURCE
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
@@ -799,26 +779,17 @@ typedef unsigned long long uint64_t;
 /* Define to 'int' if system headers don't define. */
 #undef mbstate_t
 
-/* Define to `long int' if <sys/types.h> does not define. */
-#undef off_t
-
-/* Define to `int' if <sys/types.h> does not define. */
+/* Define as a signed integer type capable of holding a process identifier. */
 #undef pid_t
 
-/* Define to `int' if <sys/types.h> does not define. */
+/* Define to `int' if <signal.h> does not define. */
 #undef sig_atomic_t
-
-/* Define to `unsigned int' if <sys/types.h> does not define. */
-#undef size_t
 
 /* Define to 'int' if <sys/socket.h> doesn't have it. */
 #undef socklen_t
 
 /* Define to `int' if <sys/types.h> does not define. */
 #undef ssize_t
-
-/* define if va_copy is not available */
-#undef va_copy
 
 /* Define to 'int' if system headers don't define. */
 #undef wchar_t

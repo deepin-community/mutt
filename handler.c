@@ -58,10 +58,10 @@ const int Index_hex[128] = {
 const int Index_64[128] = {
   -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
   -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,-1,
-  -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,-1,-1,63,
+  -1,-1,-1,-1, -1,-1,-1,-1, -1,-1,-1,62, -1,62,-1,63,
   52,53,54,55, 56,57,58,59, 60,61,-1,-1, -1,-1,-1,-1,
   -1, 0, 1, 2,  3, 4, 5, 6,  7, 8, 9,10, 11,12,13,14,
-  15,16,17,18, 19,20,21,22, 23,24,25,-1, -1,-1,-1,-1,
+  15,16,17,18, 19,20,21,22, 23,24,25,-1, -1,-1,-1,63,
   -1,26,27,28, 29,30,31,32, 33,34,35,36, 37,38,39,40,
   41,42,43,44, 45,46,47,48, 49,50,51,-1, -1,-1,-1,-1
 };
@@ -114,7 +114,7 @@ static void mutt_convert_to_state(iconv_t cd, char *bufi, size_t *l, STATE *s)
   *l = ibl;
 }
 
-static void mutt_decode_xbit (STATE *s, long len, int istext, iconv_t cd)
+static void mutt_decode_xbit (STATE *s, LOFF_T len, int istext, iconv_t cd)
 {
   int c, ch;
   char bufi[BUFI_SIZE];
@@ -230,7 +230,7 @@ static void qp_decode_line (char *dest, char *src, size_t *l,
  *
  */
 
-static void mutt_decode_quoted (STATE *s, long len, int istext, iconv_t cd)
+static void mutt_decode_quoted (STATE *s, LOFF_T len, int istext, iconv_t cd)
 {
   char line[STRING];
   char decline[2*STRING];
@@ -284,7 +284,7 @@ static void mutt_decode_quoted (STATE *s, long len, int istext, iconv_t cd)
   state_reset_prefix(s);
 }
 
-void mutt_decode_base64 (STATE *s, long len, int istext, iconv_t cd)
+void mutt_decode_base64 (STATE *s, LOFF_T len, int istext, iconv_t cd)
 {
   char buf[5];
   int c1, c2, c3, c4, ch, cr = 0, i;
@@ -375,7 +375,7 @@ static unsigned char decode_byte (char ch)
   return ch - 32;
 }
 
-static void mutt_decode_uuencoded (STATE *s, long len, int istext, iconv_t cd)
+static void mutt_decode_uuencoded (STATE *s, LOFF_T len, int istext, iconv_t cd)
 {
   char tmps[SHORT_STRING];
   char linelen, c, l, out;
@@ -389,7 +389,7 @@ static void mutt_decode_uuencoded (STATE *s, long len, int istext, iconv_t cd)
   while (len > 0)
   {
     if ((fgets(tmps, sizeof(tmps), s->fpin)) == NULL)
-      return;
+      goto cleanup;
     len -= mutt_strlen(tmps);
     if ((!mutt_strncmp (tmps, "begin", 5)) && ISSPACE (tmps[5]))
       break;
@@ -397,16 +397,16 @@ static void mutt_decode_uuencoded (STATE *s, long len, int istext, iconv_t cd)
   while (len > 0)
   {
     if ((fgets(tmps, sizeof(tmps), s->fpin)) == NULL)
-      return;
+      goto cleanup;
     len -= mutt_strlen(tmps);
     if (!mutt_strncmp (tmps, "end", 3))
       break;
     pt = tmps;
     linelen = decode_byte (*pt);
     pt++;
-    for (c = 0; c < linelen;)
+    for (c = 0; c < linelen && *pt;)
     {
-      for (l = 2; l <= 6; l += 2)
+      for (l = 2; l <= 6 && *pt && *(pt + 1); l += 2)
       {
 	out = decode_byte (*pt) << l;
 	pt++;
@@ -421,6 +421,7 @@ static void mutt_decode_uuencoded (STATE *s, long len, int istext, iconv_t cd)
     }
   }
 
+cleanup:
   mutt_convert_to_state (cd, bufi, &k, s);
   mutt_convert_to_state (cd, 0, 0, s);
 
@@ -784,7 +785,7 @@ static int text_enriched_handler (BODY *a, STATE *s)
     TEXT, LANGLE, TAG, BOGUS_TAG, NEWLINE, ST_EOF, DONE
   } state = TEXT;
 
-  long bytes = a->length;
+  LOFF_T bytes = a->length;
   struct enriched_state stte;
   wchar_t wc = 0;
   int tag_len = 0;
@@ -910,7 +911,7 @@ static int text_enriched_handler (BODY *a, STATE *s)
 static int is_mmnoask (const char *buf)
 {
   char tmp[LONG_STRING], *p, *q;
-  int lng;
+  size_t lng;
 
   if ((p = getenv ("MM_NOASK")) != NULL && *p)
   {
@@ -938,7 +939,8 @@ static int is_mmnoask (const char *buf)
       else
       {
 	lng = mutt_strlen (p);
-	if (buf[lng] == '/' && mutt_strncasecmp (buf, p, lng) == 0)
+	if (mutt_strncasecmp (buf, p, lng) == 0 &&
+            buf[lng] == '/')
 	  return (1);
       }
 
@@ -1015,10 +1017,10 @@ static int alternative_handler (BODY *a, STATE *s)
     mustfree = 1;
     fstat (fileno (s->fpin), &st);
     b = mutt_new_body ();
-    b->length = (long) st.st_size;
+    b->length = (LOFF_T) st.st_size;
     b->parts = mutt_parse_multipart (s->fpin,
                                      mutt_get_parameter ("boundary", a->parameter),
-                                     (long) st.st_size,
+                                     (LOFF_T) st.st_size,
                                      ascii_strcasecmp ("digest", a->subtype) == 0);
   }
   else
@@ -1031,7 +1033,7 @@ static int alternative_handler (BODY *a, STATE *s)
   while (t && !choice)
   {
     char *c;
-    int btlen;  /* length of basetype */
+    size_t btlen;  /* length of basetype */
     int wild;	/* do we have a wildcard to match all subtypes? */
 
     c = strchr (t->data, '/');
@@ -1131,7 +1133,7 @@ static int alternative_handler (BODY *a, STATE *s)
   {
     if (s->flags & MUTT_DISPLAY && !option (OPTWEED))
     {
-      fseeko (s->fpin, choice->hdr_offset, 0);
+      fseeko (s->fpin, choice->hdr_offset, SEEK_SET);
       mutt_copy_bytes(s->fpin, s->fpout, choice->offset-choice->hdr_offset);
     }
     mutt_body_handler (choice, s);
@@ -1242,10 +1244,10 @@ static int multipart_handler (BODY *a, STATE *s)
   {
     fstat (fileno (s->fpin), &st);
     b = mutt_new_body ();
-    b->length = (long) st.st_size;
+    b->length = (LOFF_T) st.st_size;
     b->parts = mutt_parse_multipart (s->fpin,
                                      mutt_get_parameter ("boundary", a->parameter),
-                                     (long) st.st_size,
+                                     (LOFF_T) st.st_size,
                                      ascii_strcasecmp ("digest", a->subtype) == 0);
   }
   else
@@ -1272,7 +1274,7 @@ static int multipart_handler (BODY *a, STATE *s)
 		    TYPE (p), p->subtype, ENCODING (p->encoding), length);
       if (!option (OPTWEED))
       {
-	fseeko (s->fpin, p->hdr_offset, 0);
+	fseeko (s->fpin, p->hdr_offset, SEEK_SET);
 	mutt_copy_bytes(s->fpin, s->fpout, p->offset-p->hdr_offset);
       }
       else
@@ -1325,7 +1327,7 @@ static int autoview_handler (BODY *a, STATE *s)
   rfc1524_mailcap_lookup (a, type, sizeof(type), entry, MUTT_AUTOVIEW);
 
   fname = safe_strdup (a->filename);
-  mutt_sanitize_filename (fname, 1);
+  mutt_sanitize_filename (fname, MUTT_SANITIZE_ALLOW_8BIT);
   mutt_rfc1524_expand_filename (entry->nametemplate, fname, tempfile);
   FREE (&fname);
 
@@ -1378,55 +1380,52 @@ static int autoview_handler (BODY *a, STATE *s)
       goto bail;
     }
 
-    if (s->prefix)
+    /* Note: only replying and forwarding use s->prefix, but just to
+     * be safe, keep an explicit check for s->prefix too. */
+    if ((s->flags & (MUTT_REPLYING | MUTT_FORWARDING)) || s->prefix)
     {
-      /* Remove ansi and formatting from autoview output in replies only.
+      /* Remove ansi and formatting from autoview output.
        * The user may want to see the formatting in the pager, but it
-       * shouldn't be in their quoted reply text too.
+       * shouldn't be in their quoted reply or inline forward text too.
        */
       BUFFER *stripped = mutt_buffer_pool_get ();
       while (fgets (buffer, sizeof(buffer), fpout) != NULL)
       {
         mutt_buffer_strip_formatting (stripped, buffer, 0);
-        state_puts (s->prefix, s);
+        if (s->prefix)
+          state_puts (s->prefix, s);
         state_puts (mutt_b2s (stripped), s);
       }
       mutt_buffer_pool_release (&stripped);
+    }
+    else
+    {
+      mutt_copy_stream (fpout, s->fpout);
+    }
 
-      /* check for data on stderr */
-      if (fgets (buffer, sizeof(buffer), fperr))
+    /* Check for stderr messages */
+    if (fgets (buffer, sizeof(buffer), fperr))
+    {
+      if (s->flags & MUTT_DISPLAY)
       {
-	if (s->flags & MUTT_DISPLAY)
-	{
-	  state_mark_attach (s);
-	  state_printf (s, _("[-- Autoview stderr of %s --]\n"), mutt_b2s (command));
-	}
+        state_mark_attach (s);
+        state_printf (s, _("[-- Autoview stderr of %s --]\n"), mutt_b2s (command));
+      }
 
-	state_puts (s->prefix, s);
-	state_puts (buffer, s);
+      if (s->prefix)
+        state_puts (s->prefix, s);
+      state_puts (buffer, s);
+
+      if (s->prefix)
+      {
 	while (fgets (buffer, sizeof(buffer), fperr) != NULL)
 	{
 	  state_puts (s->prefix, s);
 	  state_puts (buffer, s);
 	}
       }
-    }
-    else
-    {
-      mutt_copy_stream (fpout, s->fpout);
-      /* Check for stderr messages */
-      if (fgets (buffer, sizeof(buffer), fperr))
-      {
-	if (s->flags & MUTT_DISPLAY)
-	{
-	  state_mark_attach (s);
-	  state_printf (s, _("[-- Autoview stderr of %s --]\n"),
-			mutt_b2s (command));
-	}
-
-	state_puts (buffer, s);
-	mutt_copy_stream (fperr, s->fpout);
-      }
+      else
+        mutt_copy_stream (fperr, s->fpout);
     }
 
   bail:
@@ -1548,7 +1547,7 @@ static int external_body_handler (BODY *b, STATE *s)
   return 0;
 }
 
-void mutt_decode_attachment (BODY *b, STATE *s)
+void mutt_decode_attachment (const BODY *b, STATE *s)
 {
   int istext = mutt_is_text_part (b);
   iconv_t cd = (iconv_t)(-1);
@@ -1564,7 +1563,7 @@ void mutt_decode_attachment (BODY *b, STATE *s)
   else if (istext && b->charset)
     cd = mutt_iconv_open (Charset, b->charset, MUTT_ICONV_HOOK_FROM);
 
-  fseeko (s->fpin, b->offset, 0);
+  fseeko (s->fpin, b->offset, SEEK_SET);
   switch (b->encoding)
   {
     case ENCQUOTEDPRINTABLE:
@@ -1623,7 +1622,7 @@ static int run_decode_and_handler (BODY *b, STATE *s, handler_t handler, int pla
   int decode = 0;
   int rc = 0;
 
-  fseeko (s->fpin, b->offset, 0);
+  fseeko (s->fpin, b->offset, SEEK_SET);
 
   /* see if we need to decode this part before processing it */
   if (b->encoding == ENCBASE64 || b->encoding == ENCQUOTEDPRINTABLE ||

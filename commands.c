@@ -287,7 +287,7 @@ int mutt_display_message (HEADER *cur)
 
     /* Remove color cache for this message, in case there
        are color patterns for both ~g and ~V */
-    cur->pair = 0;
+    cur->color.pair = cur->color.attrs = 0;
 
     /* Process protected headers and autocrypt gossip headers */
     process_protected_headers (cur);
@@ -338,7 +338,7 @@ int mutt_display_message (HEADER *cur)
     mutt_endwin (NULL);
 
     cmd = mutt_buffer_pool_get ();
-    mutt_buffer_printf (cmd, "%s %s", NONULL(Pager), mutt_b2s (tempfile));
+    mutt_expand_file_fmt (cmd, NONULL (Pager), mutt_b2s (tempfile));
     if ((r = mutt_system (mutt_b2s (cmd))) == -1)
       mutt_error (_("Error running \"%s\"!"), mutt_b2s (cmd));
     unlink (mutt_b2s (tempfile));
@@ -490,7 +490,7 @@ static void pipe_msg (HEADER *h, FILE *fp, int decode, int print)
   {
     if (!crypt_valid_passphrase(h->security))
       return;
-    endwin ();
+    mutt_endwin (NULL);
   }
 
   if (decode)
@@ -976,7 +976,7 @@ int mutt_save_message (HEADER *h, int delete, int decode, int decrypt)
         break;
       /* fatal error, abort */
       case -1:
-        goto cleanup;
+        goto errcleanup;
     }
   }
 #endif
@@ -994,7 +994,7 @@ int mutt_save_message (HEADER *h, int delete, int decode, int decrypt)
       if (_mutt_save_message(h, &ctx, delete, decode, decrypt) != 0)
       {
         mx_close_mailbox (&ctx, NULL);
-        goto cleanup;
+        goto errcleanup;
       }
     }
     else
@@ -1020,7 +1020,7 @@ int mutt_save_message (HEADER *h, int delete, int decode, int decrypt)
                                  &ctx, delete, decode, decrypt) != 0)
           {
             mx_close_mailbox (&ctx, NULL);
-            goto cleanup;
+            goto errcleanup;
           }
 	}
       }
@@ -1035,6 +1035,37 @@ int mutt_save_message (HEADER *h, int delete, int decode, int decrypt)
 
     mutt_clear_error ();
     rc = 0;
+  }
+
+errcleanup:
+  if (rc != 0)
+  {
+    if (delete)
+    {
+      if (h)
+        /* L10N:
+           Message when an index/pager save operation fails for some reason.
+        */
+        mutt_error _("Error saving message");
+      else
+        /* L10N:
+           Message when an index tagged save operation fails for some reason.
+        */
+        mutt_error _("Error saving tagged messages");
+    }
+    else
+    {
+      if (h)
+        /* L10N:
+           Message when an index/pager copy operation fails for some reason.
+        */
+        mutt_error _("Error copying message");
+      else
+        /* L10N:
+           Message when an index tagged copy operation fails for some reason.
+        */
+        mutt_error _("Error copying tagged messages");
+    }
   }
 
 cleanup:
@@ -1166,7 +1197,7 @@ static int _mutt_check_traditional_pgp (HEADER *h, int *redraw)
   h->security |= PGP_TRADITIONAL_CHECKED;
 
   mutt_parse_mime_message (Context, h);
-  if ((msg = mx_open_message (Context, h->msgno)) == NULL)
+  if ((msg = mx_open_message (Context, h->msgno, 0)) == NULL)
     return 0;
   if (crypt_pgp_check_traditional (msg->fp, h->content, 0))
   {

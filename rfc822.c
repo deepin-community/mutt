@@ -461,7 +461,7 @@ add_addrspec (ADDRESS **top, ADDRESS **last, const char *phrase,
 
 ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
 {
-  int ws_pending, nl;
+  int ws_pending, nl, in_group = 0;
 #ifdef EXACT_ADDRESS
   const char *begin;
 #endif
@@ -547,20 +547,31 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
     }
     else if (*s == ':')
     {
-      cur = rfc822_new_address ();
-      terminate_buffer (phrase, phraselen);
-      cur->mailbox = safe_strdup (phrase);
-      cur->group = 1;
+      if (phraselen)
+      {
+        /* add group terminator, if one was missing */
+        if (last && in_group)
+        {
+          last->next = rfc822_new_address ();
+          last = last->next;
+        }
 
-      if (last)
-	last->next = cur;
-      else
-	top = cur;
-      last = cur;
+        cur = rfc822_new_address ();
+        terminate_buffer (phrase, phraselen);
+        cur->mailbox = safe_strdup (phrase);
+        cur->group = 1;
+        in_group = 1;
+
+        if (last)
+          last->next = cur;
+        else
+          top = cur;
+        last = cur;
 
 #ifdef EXACT_ADDRESS
-      last->val = mutt_substrdup (begin, s);
+        last->val = mutt_substrdup (begin, s);
 #endif
+      }
 
       phraselen = 0;
       commentlen = 0;
@@ -587,11 +598,12 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
 #endif
 
       /* add group terminator */
-      if (last)
+      if (last && in_group)
       {
 	last->next = rfc822_new_address ();
 	last = last->next;
       }
+      in_group = 0;
 
       phraselen = 0;
       commentlen = 0;
@@ -653,6 +665,10 @@ ADDRESS *rfc822_parse_adrlist (ADDRESS *top, const char *s)
   if (last && !last->val)
     last->val = mutt_substrdup (begin, s - nl < begin ? begin : s - nl);
 #endif
+
+  /* add group terminator, if it was left off */
+  if (last && in_group)
+    last->next = rfc822_new_address ();
 
   return top;
 }

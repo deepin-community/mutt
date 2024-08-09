@@ -128,7 +128,7 @@ at <ulink url="https://gitlab.com/muttmua/mutt/wikis/home">https://gitlab.com/mu
 <listitem>
 <para>
 For the IRC user community, visit channel <emphasis>#mutt</emphasis> on
-<ulink url="http://www.freenode.net/">irc.freenode.net</ulink>.
+<ulink url="https://libera.chat/">irc.libera.chat</ulink>.
 </para>
 </listitem>
 </varlistentry>
@@ -220,7 +220,7 @@ denote that the argument may be repeated arbitrary times.
 <title>Copyright</title>
 
 <para>
-Mutt is Copyright &copy; 1996-2021 Michael R. Elkins
+Mutt is Copyright &copy; 1996-2023 Michael R. Elkins
 <email>me@mutt.org</email> and others.
 </para>
 
@@ -475,6 +475,19 @@ structure in detail: what content parts are attached to which parent
 part (which gives a true tree structure), which type is of what type and
 what size.  Single parts may saved, deleted or modified to offer great
 and easy access to message's internals.
+</para>
+
+</sect2>
+
+<sect2 id="intro-list">
+<title>List Menu</title>
+
+<para>
+The list menu assists with operations on mailing lists. RFC 2369 defines
+several interactions with mailing lists and list memberships that can
+be specified within the email message: subscribe, unsubscribe, contact
+the list owner, etc. When you invoke the list menu, these interactions
+are made accessible as menu options.
 </para>
 
 </sect2>
@@ -845,6 +858,8 @@ linkend="tab-ansi-esc"/>.
 <row><entry>7</entry><entry>Reverse video on</entry></row>
 <row><entry>3<emphasis>&lt;color&gt;</emphasis></entry><entry>Foreground color is <emphasis>&lt;color&gt;</emphasis> (see <xref linkend="tab-color"/>)</entry></row>
 <row><entry>4<emphasis>&lt;color&gt;</emphasis></entry><entry>Background color is <emphasis>&lt;color&gt;</emphasis> (see <xref linkend="tab-color"/>)</entry></row>
+<row><entry>38;5;<emphasis>&lt;color&gt;</emphasis></entry><entry>Foreground color is an 8-bit <emphasis>&lt;color&gt;</emphasis></entry></row>
+<row><entry>48;5;<emphasis>&lt;color&gt;</emphasis></entry><entry>Background color is an 8-bit <emphasis>&lt;color&gt;</emphasis></entry></row>
 </tbody>
 </tgroup>
 </table>
@@ -1237,16 +1252,12 @@ shell is executed.
 
 <varlistentry>
 <term>
-<literal>&lt;toggle-quoted&gt;</literal><anchor id="toggle-quoted"/>
-(default: T)
+<literal>&lt;skip-headers&gt;</literal><anchor id="skip-headers"/>
+(default: H)
 </term>
 <listitem>
 <para>
-The pager uses the <link linkend="quote-regexp">$quote_regexp</link>
-variable to detect quoted text when displaying the body of the message.
-This function toggles the display of the quoted material in the message.
-It is particularly useful when being interested in just the response and
-there is a large amount of quoted text in the way.
+This function will skip past the headers of the current message.
 </para>
 </listitem>
 </varlistentry>
@@ -1260,6 +1271,22 @@ there is a large amount of quoted text in the way.
 <para>
 This function will go to the next line of non-quoted text which comes
 after a line of quoted text in the internal pager.
+</para>
+</listitem>
+</varlistentry>
+
+<varlistentry>
+<term>
+<literal>&lt;toggle-quoted&gt;</literal><anchor id="toggle-quoted"/>
+(default: T)
+</term>
+<listitem>
+<para>
+The pager uses the <link linkend="quote-regexp">$quote_regexp</link>
+variable to detect quoted text when displaying the body of the message.
+This function toggles the display of the quoted material in the message.
+It is particularly useful when being interested in just the response and
+there is a large amount of quoted text in the way.
 </para>
 </listitem>
 </varlistentry>
@@ -1823,7 +1850,9 @@ fo-table</literal> for details.
 </para>
 <para>
   Mutt will save all <literal>boolean</literal> and
-  <literal>quadoption</literal> configuration variables, along with
+  <literal>quadoption</literal> configuration variables,
+  the current folder (which will be used for <literal>^</literal>
+  mailbox shortcut expansion), along with:
   <link linkend="folder">$folder</link>,
   <link linkend="record">$record</link>,
   <link linkend="postponed">$postponed</link>,
@@ -1872,10 +1901,13 @@ and <quote>f</quote> respectively.
 
 <para>
 Forwarding can be done by including the original message in the new
-message's body (surrounded by indicating lines) or including it as a
-MIME attachment, depending on the value of the <link
-linkend="mime-forward">$mime_forward</link> variable.  Decoding of
-attachments, like in the pager, can be controlled by the <link
+message's body (surrounded by indicating lines: see <link
+linkend="forward-attribution-intro">$forward_attribution_intro</link>
+and <link
+linkend="forward-attribution-trailer">$forward_attribution_trailer</link>)
+or including it as a MIME attachment, depending on the value of the
+<link linkend="mime-forward">$mime_forward</link> variable.  Decoding
+of attachments, like in the pager, can be controlled by the <link
 linkend="forward-decode">$forward_decode</link> and <link
 linkend="mime-forward-decode">$mime_forward_decode</link> variables,
 respectively.  The desired forwarding format may depend on the content,
@@ -1898,7 +1930,9 @@ linkend="forward-attachments">$forward_attachments</link>.
 <para>
 The inclusion of headers is controlled by the current setting of the
 <link linkend="weed">$weed</link> variable, unless <link
-linkend="mime-forward">$mime_forward</link> is set.
+linkend="mime-forward">$mime_forward</link> is set.  The subject of
+the email is controlled by <link
+linkend="forward-format">$forward_format</link>.
 </para>
 
 <para>
@@ -1950,6 +1984,12 @@ See also the <link linkend="postpone">$postpone</link> quad-option.
 
 <sect1 id="encryption">
 <title>Encryption and Signing</title>
+
+<para>
+Mutt supports encrypting and signing emails when used interactively.
+In batch mode, cryptographic operations are disabled, so these options
+can't be used to sign an email sent via a cron job, for instance.
+</para>
 
 <para>
 OpenPGP and S/MIME are enabled in one of two ways: <quote>classic
@@ -2249,7 +2289,7 @@ parenthesis-enclosed expression will be evaluated as MuttLisp.  See the
 </para>
 
 <example id="ex-rc-muttlisp">
-<title>Using MuttLisp expresions</title>
+<title>Using MuttLisp expressions</title>
 <screen>
 set signature = \
   (if (equal $my_name "Kevin McCarthy") ~/kevin.sig ~/other.sig)
@@ -2482,6 +2522,12 @@ unalias *
 </screen>
 
 <para>
+Note: The alias <emphasis>key</emphasis> is matched case
+insensitively when creating (checking for duplicates), removing, or
+expanding aliases.
+</para>
+
+<para>
 Unlike other mailers, Mutt doesn't require aliases to be defined in a
 special file.  The <command>alias</command> command can appear anywhere
 in a configuration file, as long as this file is <link
@@ -2529,7 +2575,7 @@ a comma denoting multiple addresses.
 
 <para>
 In the alias menu, you can select as many aliases as you want with the
-<literal>select-entry</literal> key (default: &lt;Return&gt;), and use
+<literal>tag-entry</literal> key (default: &lt;Space&gt; or t), and use
 the <emphasis>exit</emphasis> key (default: q) to return to the address
 prompt.
 </para>
@@ -2702,9 +2748,11 @@ well as <emphasis>\C</emphasis> is ignored, so that
 <emphasis>\cA</emphasis> and <emphasis>\ca</emphasis> are all
 equivalent.  An alternative form is to specify the key as a three digit
 octal number prefixed with a <quote>\</quote> (for example
-<emphasis>\177</emphasis> is equivalent to <emphasis>\c?</emphasis>). In
-addition, <emphasis>key</emphasis> may be a symbolic name as shown in
-<xref linkend="tab-key-names"/>.
+<emphasis>\177</emphasis> is equivalent to <emphasis>\c?</emphasis>).
+You can also use the form <emphasis>&lt;177&gt;</emphasis>, which
+allows octal numbers with an arbitrary number of digits.  In addition,
+<emphasis>key</emphasis> may be a symbolic name as shown in <xref
+linkend="tab-key-names"/>.
 </para>
 
 <table id="tab-key-names">
@@ -2732,6 +2780,7 @@ addition, <emphasis>key</emphasis> may be a symbolic name as shown in
 <row><entry>&lt;insert&gt;</entry><entry>Insert</entry></row>
 <row><entry>&lt;enter&gt;</entry><entry>Enter</entry></row>
 <row><entry>&lt;return&gt;</entry><entry>Return</entry></row>
+<row><entry>&lt;keypadenter&gt;</entry><entry>Enter key on numeric keypad</entry></row>
 <row><entry>&lt;home&gt;</entry><entry>Home</entry></row>
 <row><entry>&lt;end&gt;</entry><entry>End</entry></row>
 <row><entry>&lt;space&gt;</entry><entry>Space bar</entry></row>
@@ -2796,6 +2845,32 @@ specified key sequence.
     (e.g, by placing that line in your .bashrc, or in a Mutt wrapper
     script/function) you can use the key sequence in your Mutt
     bindings.
+  </para>
+</sect2>
+
+<sect2 id="crlf">
+  <title>Enter versus Return</title>
+
+  <para>
+    Prior to version 2.2, Mutt used a default ncurses mode
+    (<quote><literal>nl()</literal></quote>).  This mode maps keyboard
+    input of either <literal>&lt;Enter&gt;</literal> or
+    <literal>&lt;Return&gt;</literal> to the same value, which Mutt
+    interpreted as <literal>&lt;Return&gt;</literal> internally.
+  </para>
+  <para>
+    However, starting in version 2.2, this mode is turned off,
+    allowing <literal>&lt;Return&gt;</literal> and
+    <literal>&lt;Enter&gt;</literal> to be mapped separately, if
+    desired.  The default keyboard mappings set both, but you can
+    override this or create new bindings with one or the other (or
+    both).
+  </para>
+  <para>
+    Note that in terminal application, such as Mutt,
+    <literal>&lt;Enter&gt;</literal> is the same as <quote>\n</quote>
+    and <literal>^J</literal>; while <literal>&lt;Return&gt;</literal>
+    is the same as <quote>\r</quote> and <literal>^M</literal>.
   </para>
 </sect2>
 
@@ -3364,6 +3439,13 @@ readability. (Note that the sending side is not affected by this, Mutt
 tries to implement standards compliant folding.)
 </para>
 
+<para>
+Despite not being a real header, Mutt will also display an mbox
+&quot;From_&quot; line in the pager along with other headers.  This
+line can be manipulated with <command>ignore/unignore</command> and
+<command>hdr_order/unhdr_order</command> commands.
+</para>
+
 </sect2>
 
 <sect2 id="ignore">
@@ -3427,6 +3509,13 @@ unignore organization organisation x-mailer: x-newsreader: x-mailing-list:
 unignore posted-to:
 </screen>
 </example>
+
+<para>
+The above example will show &quot;From:&quot; headers as well as mbox
+&quot;From_&quot; lines.  To hide the latter, instead use
+&quot;<literal>unignore from: date subject to cc</literal>&quot; on
+the second line.
+</para>
 
 </sect2>
 
@@ -3714,6 +3803,16 @@ keep it on the list of known mailing lists, use
 <command>unsubscribe</command>.
 </para>
 
+<para>
+All of the mailing list configuration options described so far govern
+mutt's knowledge of your list subscriptions and how it presents list
+information to you. If you have a message from a mailing list, you
+can also use the <link linkend="tab-list-bindings">list
+menu</link> (bound to &quot;ESC L&quot; by default) to interact with
+the message's list's list server.  This makes it easy to subscribe,
+unsubscribe, and so on.
+</para>
+
 </sect1>
 
 <sect1 id="mbox-hook">
@@ -3770,6 +3869,14 @@ to save read mail in more than a single mailbox).
 <arg choice="opt">
   <group choice="opt">
     <arg choice="plain">
+      <option>-notify</option>
+    </arg>
+    <arg choice="plain">
+      <option>-nonotify</option>
+    </arg>
+  </group>
+  <group choice="opt">
+    <arg choice="plain">
       <option>-poll</option>
     </arg>
     <arg choice="plain">
@@ -3805,6 +3912,14 @@ to save read mail in more than a single mailbox).
 <para>
 This command specifies folders which can receive mail and which will be
 checked for new messages periodically.
+</para>
+
+<para>
+Use <literal>-nonotify</literal> to disable notifying when new mail
+arrives.  The <literal>-notify</literal> argument can be used to reenable
+notifying for an existing mailbox.  If unspecified: a new
+mailbox will notify by default, while an existing mailbox will be
+unchanged.
 </para>
 
 <para>
@@ -5427,9 +5542,12 @@ The <literal>mailto_allow</literal> and <literal>unmailto_allow</literal>
 commands allow the user to modify the list of approved headers.
 </para>
 <para>
-Mutt initializes the default list to contain only the <literal>Subject</literal>
-and <literal>Body</literal> header fields, which are the only requirement specified
-by the <literal>mailto:</literal> specification in RFC2368.
+Mutt initializes the default list to contain the
+<literal>Subject</literal> and <literal>Body</literal> header fields,
+which are the only requirement specified by the
+<literal>mailto:</literal> specification in RFC2368, along with
+<literal>Cc</literal>, <literal>In-Reply-To</literal>, and
+<literal>References</literal>, to support mailing list URLs.
 </para>
 </sect1>
 
@@ -6700,6 +6818,19 @@ to set <link linkend="record">$record</link>:
 </screen>
 
 <para>
+Note: the current mailbox shortcut,
+<quote><literal>^</literal></quote>, has no value in some cases.  No
+mailbox is opened when Mutt is invoked to send an email from the
+command-line.  In interactive mode, Mutt reads the muttrc before
+opening the mailbox, so immediate expansion won't work as expected
+either.  This can be an issue when trying to directly assign to <link
+linkend="record">$record</link>, but also affects the <link
+linkend="fcc-hook">fcc-hook</link> mailbox, which is expanded
+immediately too.  The folder-hook example above works because the
+command is executed later, when the folder-hook fires.
+</para>
+
+<para>
 Note: the <link linkend="record">$record</link> shortcut
 <quote><literal>&lt;</literal></quote> is substituted without any
 regard to multiple mailboxes and <link
@@ -6803,6 +6934,24 @@ you would like to use the address given in the <quote>Reply-To</quote>
 field, or reply directly to the address given in the <quote>From</quote>
 field.  When set to <emphasis>yes</emphasis>, the
 <quote>Reply-To</quote> field will be used when present.
+</para>
+
+<para>
+While looking at an email message from a mailing list in the index or
+pager, you can interact with the list server in the ways defined by RFC
+2369, provided the email message specifies how to do so.  Invoke the
+<link linkend="tab-list-bindings"> list menu</link> (bound to &quot;ESC
+L&quot; by default) to see what options are available for a given
+message. Common options are:
+<itemizedlist>
+<listitem><para>Post to the list</para></listitem>
+<listitem><para>Contact the list owner</para></listitem>
+<listitem><para>Subscribe to the list</para></listitem>
+<listitem><para>Unsubscribe from the list</para></listitem>
+<listitem><para>Get help from the list server</para></listitem>
+<listitem><para>Get list archive information</para></listitem>
+</itemizedlist>
+Note that many list servers only specify some of these options.
 </para>
 
 <para>
@@ -7001,7 +7150,9 @@ mail using the <literal>&lt;check-new&gt;</literal> function which is
 unbound by default. Pressing TAB will bring up a menu showing the files
 specified by the <command>mailboxes</command> command, and indicate
 which contain new messages. Mutt will automatically enter this mode when
-invoked from the command line with the <literal>-y</literal> option.
+invoked from the command line with the <literal>-y</literal> option,
+or from the index/pager via the <literal>&lt;browse-mailboxes&gt;</literal>
+function.
 </para>
 
 <para>
@@ -7070,9 +7221,9 @@ feature.
 If <link linkend="mail-check-stats">$mail_check_stats</link> is set,
 Mutt will periodically calculate the unread, flagged, and total
 message counts for each mailbox watched by the
-<command>mailboxes</command> command.  This calculation takes place at
-the same time as new mail polling, but is controlled by a separate
-timer: <link
+<command>mailboxes</command> command.  (Note: IMAP mailboxes only support
+unread and total counts).  This calculation takes place at the same
+time as new mail polling, but is controlled by a separate timer: <link
 linkend="mail-check-stats-interval">$mail_check_stats_interval</link>.
 </para>
 
@@ -7321,7 +7472,106 @@ macro index ,a "&lt;save-message&gt;=archive&lt;enter&gt;&lt;enter-command&gt;ec
     </listitem>
     <listitem>
       <para>
+        <link linkend="send-multipart-alternative">$send_multipart_alternative</link>
+        generation.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
         Message encryption and signing.  Key selection.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        Fcc saving if <link
+        linkend="fcc-before-send">$fcc_before_send</link> is set.  (Note the
+        variable documentation for caveats of Fcc'ing before sending.)
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        Message sending.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        Fcc saving if <link
+        linkend="fcc-before-send">$fcc_before_send</link> is unset
+        (the default).  Note: prior to version 1.12, the Fcc was saved
+        before sending the message.  It is now by default saved
+        afterwards, but if the saving fails, the user is prompted.
+      </para>
+    </listitem>
+  </itemizedlist>
+</sect1>
+
+<sect1 id="batch-compose-flow">
+  <title>Batch Composition Flow</title>
+
+  <para>
+    In batch mode, Mutt performs less steps than interactive mode.
+    Encryption and Signing are not supported.
+  </para>
+
+  <itemizedlist>
+    <listitem>
+      <para>
+        <link linkend="my-hdr">my_hdr</link> processing for To, Cc,
+        Bcc headers.  (Subject is not processed.)
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        From header setting.  Note: this is so <link
+        linkend="send-hook">send-hook</link>s below can match ~P, but
+        From is re-set further below in case a send-hook changes the
+        value.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="send-hook">send-hook</link>
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        From header setting.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="my-hdr">my_hdr</link> processing for From,
+        Reply-To, Message-ID and user-defined headers.  The To, Cc,
+        Bcc, Subject, and Return-Path headers are ignored at this
+        stage.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        Message body is copied from stdin.  <link
+        linkend="signature">$signature</link> is not appended in batch
+        mode.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="send2-hook">send2-hook</link>
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="realname">$realname</link> part of From header setting.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="fcc-hook">fcc-hook</link>.  Fcc setting.
+      </para>
+    </listitem>
+    <listitem>
+      <para>
+        <link linkend="send-multipart-alternative">$send_multipart_alternative</link>
+        generation.
       </para>
     </listitem>
     <listitem>
@@ -7547,7 +7797,7 @@ echo (not (equal one two))
     <sect3 id="muttlisp-and">
       <title>and</title>
       <para>
-        Returns the first argument that evalutes to the empty string.
+        Returns the first argument that evaluates to the empty string.
         Otherwise returns the last argument, or "t" if there are no arguments.
       </para>
 <screen>
@@ -7600,6 +7850,25 @@ echo (if "" one two)
 set spoolfile = "/var/mail/user"
 echo (if (equal $spoolfile "/var/mail/user") yes no)
   ==> "yes"
+</screen>
+      <para>
+        Note that boolean configuration variables evaluate to the strings
+        &quot;yes&quot; or &quot;no&quot;.  You can see the value of other
+        kinds of configuration variables using the
+        <link linkend="echo">echo</link> command.
+      </para>
+<screen>
+unset allow_ansi
+echo $allow_ansi
+  ===> "no"
+
+# the correct way to test a boolean:
+echo (if (equal $allow_ansi "yes") "set" "unset")
+  ===> "unset"
+
+# the incorrect way to test a boolean:
+echo (if $allow_ansi "set" "unset")
+  ===> "set"
 </screen>
     </sect3>
   </sect2>
@@ -7855,6 +8124,87 @@ See table <xref linkend="tab-attachment-bindings"/> for all available
 functions.
 </para>
 
+<sect3 id="attach-viewers">
+<title>Viewing Attachments</title>
+
+<para>
+There are four(!) ways of viewing attachments, so the functions
+deserve some extra explanation.
+</para>
+
+<variablelist>
+  <varlistentry>
+    <term>
+      <literal>&lt;view-mailcap&gt;</literal>
+      (default keybinding: m)
+    </term>
+    <listitem>
+      <para>
+        This will use the first matching mailcap entry.
+      </para>
+      <para>
+        If no matching mailcap entries are found, it will abort with an
+        error message.
+      </para>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>
+      <literal>&lt;view-attach&gt;</literal>
+      (default keybinding: &lt;Enter&gt;)
+    </term>
+    <listitem>
+      <para>
+        Mutt will display internally supported MIME types (see <xref
+        linkend="mime-pager"/>) in the pager.  This will respect
+        <link linkend="auto-view">auto_view</link> settings, to determine
+        whether to use a <literal>copiousoutput</literal> mailcap entry or
+        just directly display the attachment.
+      </para>
+      <para>
+        Other MIME types will use the first matching mailcap entry.
+      </para>
+      <para>
+        If no matching mailcap entries are found, the attachment will
+        be displayed in the pager as raw text.
+      </para>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>
+      <literal>&lt;view-pager&gt;</literal>
+    </term>
+    <listitem>
+      <para>
+        Mutt will use the first matching
+        <literal>copiousoutput</literal> mailcap entry to display the
+        attachment in the pager (regardless of <link
+        linkend="auto-view">auto_view</link> settings).
+      </para>
+      <para>
+        If no matching mailcap entries are found, the attachment will
+        be displayed in the pager as raw text.
+      </para>
+    </listitem>
+  </varlistentry>
+
+  <varlistentry>
+    <term>
+      <literal>&lt;view-text&gt;</literal>
+      (default keybinding: T)
+    </term>
+    <listitem>
+      <para>
+        The attachment will always be displayed in the pager as raw
+        text.
+      </para>
+    </listitem>
+  </varlistentry>
+</variablelist>
+</sect3>
+
 </sect2>
 
 <sect2 id="compose-menu">
@@ -7908,7 +8258,7 @@ list of available expandos to format this display to your needs.
 To get most out of MIME, it's important that a MIME part's content type
 matches the content as closely as possible so that the recipient's
 client can automatically select the right viewer for the
-content. However, there's no reliable for Mutt to know how to detect
+content. However, there's no reliable way for Mutt to know how to detect
 every possible file type. Instead, it uses a simple plain text mapping
 file that specifies what file extension corresponds to what MIME
 type. This file is called <literal>mime.types</literal>.
@@ -8677,7 +9027,10 @@ linkend="auto-view"><command>auto_view</command></link>, and use that.
 </listitem>
 <listitem>
 <para>
-Failing that, Mutt will look for any text type.
+Failing that, Mutt will look first for
+<literal>text/enriched</literal>, followed by
+<literal>text/plain</literal>, and finally
+<literal>text/html</literal>.
 </para>
 </listitem>
 <listitem>
@@ -8714,11 +9067,13 @@ Content in html format
 </screen>
 
 <para>
-A preview of the alternative can be viewed in the compose menu using the functions
-<literal>&lt;view-alt&gt;</literal>,
-<literal>&lt;view-alt-text&gt;</literal> and
-<literal>&lt;view-alt-mailcap&gt;</literal>, bound to
-&quot;v&quot;, &quot;Esc v&quot; and &quot;V&quot; by default.
+A preview of the alternative can be viewed in the compose menu using
+the functions <literal>&lt;view-alt&gt;</literal> (bound to
+&quot;v&quot;), <literal>&lt;view-alt-text&gt;</literal> (bound to
+&quot;Esc v&quot;), <literal>&lt;view-alt-mailcap&gt;</literal> (bound
+to &quot;V&quot;), and <literal>&lt;view-alt-pager&gt;</literal>
+(unbound).  See <xref linkend="attach-viewers"/> for a discussion of
+the differences between these viewing functions.
 </para>
 
 </sect1>
@@ -9581,7 +9936,8 @@ If enabled, <link linkend="header-cache">$header_cache</link> can be
 used to either point to a file or a directory. If set to point to a
 file, one database file for all folders will be used (which may result
 in lower performance), but one file per folder if it points to a
-directory.
+directory.  When pointing to a directory, be sure to create the directory
+in advance, or Mutt will interpret it as a file to be created.
 </para>
 
 </sect2>
@@ -10736,10 +11092,13 @@ on screen carefully enough.
 
 <para>
 To prevent these issues, Mutt by default only accepts the
-<literal>Subject</literal> and <literal>Body</literal> headers.
-Allowed headers can be adjusted with the
-<link linkend="mailto-allow"><command>mailto_allow</command></link> and
-<link linkend="mailto-allow"><command>unmailto_allow</command></link> commands.
+<literal>Subject</literal>, <literal>Body</literal>,
+<literal>Cc</literal>, <literal>In-Reply-To</literal>, and
+<literal>References</literal> headers.  Allowed headers can be
+adjusted with the <link
+linkend="mailto-allow"><command>mailto_allow</command></link> and
+<link linkend="mailto-allow"><command>unmailto_allow</command></link>
+commands.
 </para>
 
 </sect2>
@@ -10922,7 +11281,11 @@ mailboxes and to send messages from the command line as well.
 <row><entry>-a</entry><entry>attach a file to a message</entry></row>
 <row><entry>-b</entry><entry>specify a blind carbon-copy (BCC) address</entry></row>
 <row><entry>-c</entry><entry>specify a carbon-copy (Cc) address</entry></row>
-<row><entry>-d</entry><entry>log debugging output to ~/.muttdebug0 if mutt was compiled with +DEBUG; it can range from 1-5 and affects verbosity (a value of 2 is recommended)</entry></row>
+<row><entry>-d</entry><entry>log debugging output to ~/.muttdebug0 if
+mutt was compiled with +DEBUG; it can range from -5 to 5 and affects
+verbosity. A value of 0 disables debugging. A value less than zero
+disables automatic log file rotation. A value of 2 is recommended for
+most diagnostics.</entry></row>
 <row><entry>-D</entry><entry>print the value of all Mutt variables to stdout</entry></row>
 <row><entry>-E</entry><entry>edit the draft (-H) or include (-i) file</entry></row>
 <row><entry>-e</entry><entry>specify a config command to be run after initialization files are read</entry></row>
@@ -11026,11 +11389,18 @@ aborted.
 <para>
 A draft file passed with <literal>-H</literal> will be used as the
 initial header and body for the message.  Multipart messages can be
-used as a draft file.  When combined with <literal>-E</literal>, the
-draft file will be updated to the final state of the message after
-composition, regardless of whether the message is sent, aborted, or
-even postponed.  Note that if the message is sent encrypted or signed,
-the draft file will be saved that way too.
+used as a draft file, and are processed the same in interactive and
+batch mode; they are not passed through untouched.  For example,
+encrypted draft files will be decrypted.  When combined with
+<literal>-E</literal>, the draft file will be updated to the final
+state of the message after composition, regardless of whether the
+message is sent, aborted, or even postponed.  Note that if the message
+is sent encrypted or signed, the draft file will be saved that way
+too.
+</para>
+
+<para>
+
 </para>
 
 <para>
@@ -11582,6 +11952,14 @@ The following are the commands understood by Mutt:
 <cmdsynopsis>
 <command><link linkend="mailboxes">mailboxes</link></command>
 <arg choice="opt">
+  <group choice="opt">
+    <arg choice="plain">
+      <option>-notify</option>
+    </arg>
+    <arg choice="plain">
+      <option>-nonotify</option>
+    </arg>
+  </group>
   <group choice="opt">
     <arg choice="plain">
       <option>-poll</option>

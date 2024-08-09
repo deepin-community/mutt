@@ -106,7 +106,7 @@ static QUERY *run_query (char *s, int quiet)
   int dummy = 0;
   char *msg = NULL;
   size_t msglen;
-  char *p;
+  char *tok, *nexttok;
   pid_t thepid;
 
   cmd = mutt_buffer_pool_get ();
@@ -128,27 +128,35 @@ static QUERY *run_query (char *s, int quiet)
   msg = mutt_read_line (msg, &msglen, fp, &dummy, 0);
   while ((buf = mutt_read_line (buf, &buflen, fp, &dummy, 0)) != NULL)
   {
-    if ((p = strtok(buf, "\t\n")))
-    {
-      if (first == NULL)
-      {
-	first = (QUERY *) safe_calloc (1, sizeof (QUERY));
-	cur = first;
-      }
-      else
-      {
-	cur->next = (QUERY *) safe_calloc (1, sizeof (QUERY));
-	cur = cur->next;
-      }
+    tok = buf;
+    if ((nexttok = strchr (tok, '\t')))
+      *nexttok++ = 0;
 
-      cur->addr = rfc822_parse_adrlist (cur->addr, p);
-      p = strtok(NULL, "\t\n");
-      if (p)
+    if (first == NULL)
+    {
+      first = (QUERY *) safe_calloc (1, sizeof (QUERY));
+      cur = first;
+    }
+    else
+    {
+      cur->next = (QUERY *) safe_calloc (1, sizeof (QUERY));
+      cur = cur->next;
+    }
+
+    cur->addr = rfc822_parse_adrlist (cur->addr, tok);
+    if (nexttok)
+    {
+      tok = nexttok;
+      if ((nexttok = strchr (tok, '\t')))
+        *nexttok++ = 0;
+      cur->name = safe_strdup (tok);
+
+      if (nexttok)
       {
-	cur->name = safe_strdup (p);
-	p = strtok(NULL, "\t\n");
-	if (p)
-	  cur->other = safe_strdup (p);
+        tok = nexttok;
+        if ((nexttok = strchr (tok, '\t')))
+          *nexttok++ = 0;
+        cur->other = safe_strdup (tok);
       }
     }
   }
@@ -521,7 +529,7 @@ static void query_menu (char *buf, size_t buflen, QUERY *results, int retbuf)
 	    ADDRESS *tmpa = result_to_addr (QueryTable[i].data);
 	    mutt_addrlist_to_local (tmpa);
 	    strcat (buf, ", ");	/* __STRCAT_CHECKED__ */
-	    rfc822_write_address ((char *) buf + curpos + 1, buflen - curpos - 1,
+	    rfc822_write_address ((char *) buf + curpos + 2, buflen - curpos - 2,
 				  tmpa, 0);
 	    curpos = mutt_strlen (buf);
 	    rfc822_free_address (&tmpa);

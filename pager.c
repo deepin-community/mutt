@@ -100,7 +100,7 @@ struct q_class_t
 {
   int length;
   int index;
-  int color;
+  COLOR_ATTR color;
   char *prefix;
   struct q_class_t *next, *prev;
   struct q_class_t *down, *up;
@@ -108,7 +108,7 @@ struct q_class_t
 
 struct syntax_t
 {
-  int color;
+  COLOR_ATTR color;
   int first;
   int last;
 };
@@ -117,13 +117,15 @@ struct line_t
 {
   LOFF_T offset;
   short type;
-  short continuation;
   short chunks;
   short search_cnt;
+  unsigned int continuation : 1;
+  unsigned int is_cont_hdr  : 1; /* continuation of header line */
+  unsigned int show_patterns_done : 1; /* body patterns and quote type computed,
+                                        * as part of showing the line */
   struct syntax_t *syntax;
   struct syntax_t *search;
   struct q_class_t *quote;
-  unsigned int is_cont_hdr; /* this line is a continuation of the previous header line */
 };
 
 #define ANSI_OFF       (1<<0)
@@ -198,20 +200,24 @@ comp_syntax_t (const void *m1, const void *m2)
 
 static void
 resolve_color (struct line_t *lineInfo, int n, int cnt, int flags, int special,
-               ansi_attr *a)
+               ansi_attr *a, int wrap_cols)
 {
-  int def_color;		/* color without syntax highlight */
-  int color;			/* final color */
-  static int last_color;	/* last color set */
+  COLOR_ATTR def_color = {0};		/* color without syntax highlight */
+  COLOR_ATTR color = {0};		/* final color */
+  static COLOR_ATTR last_color = {0};	/* last color set */
   int search = 0, m;
   struct syntax_t *matching_chunk;
 
+  /* force attrset() */
   if (!cnt)
-    last_color = -1;		/* force attrset() */
+  {
+    last_color.pair = -1;
+    last_color.attrs = -1;
+  }
 
   if (lineInfo[n].continuation)
   {
-    if (!cnt && option (OPTMARKERS))
+    if (!cnt && option (OPTMARKERS) && (wrap_cols > 1))
     {
       SETCOLOR (MT_COLOR_MARKERS);
       addch ('+');
@@ -273,56 +279,57 @@ resolve_color (struct line_t *lineInfo, int n, int cnt, int flags, int special,
 #ifdef HAVE_COLOR
   if ((a->attr & ANSI_COLOR) && !search)
   {
-    /* Note: we don't free ansi colors.  This used to be done in
-     * grok_ansi() but a color-pair in use on the screen can not be
-     * reallocated via init_pair() to another color. There are at
-     * most 64 ansi colors, so just let them accumulate.
-     * However, don't refcount since they aren't tracked.
-     */
     if (a->pair == -1)
-      a->pair = mutt_alloc_color (a->fg, a->bg, 0);
-    color = a->pair;
+      a->pair = mutt_alloc_ansi_color (a->fg, a->bg);
+    color.pair = a->pair;
   }
   else
 #endif
     if (special)
     {
-      if ((special & A_BOLD) && ColorDefs[MT_COLOR_BOLD] && !search)
+      if ((special & A_BOLD) &&
+          (ColorDefs[MT_COLOR_BOLD].pair ||
+           ColorDefs[MT_COLOR_BOLD].attrs) &&
+          !search)
       {
         color = ColorDefs[MT_COLOR_BOLD];
         if (special & A_UNDERLINE)
-          color |= A_UNDERLINE;
+          color.attrs |= A_UNDERLINE;
       }
-      else if ((special & A_UNDERLINE) && ColorDefs[MT_COLOR_UNDERLINE] && !search)
+      else if ((special & A_UNDERLINE) &&
+               (ColorDefs[MT_COLOR_UNDERLINE].pair ||
+                ColorDefs[MT_COLOR_UNDERLINE].attrs) &&
+               !search)
       {
         color = ColorDefs[MT_COLOR_UNDERLINE];
         if (special & A_BOLD)
-          color |= A_BOLD;
+          color.attrs |= A_BOLD;
       }
       else
       {
         if (special & A_BOLD)
-          color |= A_BOLD;
+          color.attrs |= A_BOLD;
         if (special & A_UNDERLINE)
-          color |= A_UNDERLINE;
+          color.attrs |= A_UNDERLINE;
       }
     }
 
   if (a->attr)
   {
     if (a->attr & ANSI_BOLD)
-      color |= A_BOLD;
+      color.attrs |= A_BOLD;
     if (a->attr & ANSI_UNDERLINE)
-      color |= A_UNDERLINE;
+      color.attrs |= A_UNDERLINE;
     if (a->attr & ANSI_REVERSE)
-      color |= A_REVERSE;
+      color.attrs |= A_REVERSE;
     if (a->attr & ANSI_BLINK)
-      color |= A_BLINK;
+      color.attrs |= A_BLINK;
     if (a->attr == ANSI_OFF)
       a->attr = 0;
   }
 
-  if (color != last_color)
+  if (color.pair != last_color.pair ||
+      color.attrs != last_color.attrs)
   {
     ATTRSET (color);
     last_color = color;
@@ -337,6 +344,7 @@ append_line (struct line_t *lineInfo, int n, int cnt)
   lineInfo[n+1].type = lineInfo[n].type;
   (lineInfo[n+1].syntax)[0].color = (lineInfo[n].syntax)[0].color;
   lineInfo[n+1].continuation = 1;
+  lineInfo[n+1].show_patterns_done = lineInfo[n].show_patterns_done;
 
   /* find the real start of the line */
   for (m = n; m >= 0; m--)
@@ -767,13 +775,140 @@ mutt_is_quote_line (char *buf, regmatch_t *pmatch)
 }
 
 static void
+match_body_patterns (char *buf, struct line_t *lineInfo, int n)
+{
+  COLOR_LINE *color_line, *color_list;
+  size_t buflen;
+  int has_nl = 0, i, offset = 0, found, has_reg_match;
+  regmatch_t pmatch[1];
+  regoff_t rm_so, rm_eo;
+  short line_allocated_chunks;
+
+  /* don't consider line endings part of the buffer
+   * for regex matching */
+  if ((buflen = mutt_strlen (buf)) > 0 && buf[buflen - 1] == '\n')
+  {
+    has_nl = 1;
+    buf[buflen - 1] = 0;
+  }
+
+  /* note: the lineInfo[n].syntax comes with one pre-allocated
+   *       during initialization. */
+  line_allocated_chunks = 1;
+  lineInfo[n].chunks = 0;
+
+  if (lineInfo[n].type == MT_COLOR_HDEFAULT)
+    color_list = ColorHdrList;
+  else
+    color_list = ColorBodyList;
+
+  for (color_line = color_list; color_line; color_line = color_line->next)
+  {
+    color_line->stop_matching = 0;
+    color_line->cached = 0;
+  }
+
+  do
+  {
+    /* if has_nl, we've stripped off a trailing newline */
+    if (offset >= (buflen - has_nl))
+      break;
+
+    found = 0;
+    color_line = color_list;
+    while (color_line)
+    {
+      has_reg_match = 0;
+      if (!color_line->stop_matching)
+      {
+        if (color_line->cached)
+        {
+          has_reg_match = 1;
+          rm_so = color_line->cached_rm_so;
+          rm_eo = color_line->cached_rm_eo;
+        }
+        else
+        {
+          if (regexec (&color_line->rx, buf + offset, 1, pmatch,
+                       (offset ? REG_NOTBOL : 0)) == 0)
+          {
+            has_reg_match = 1;
+            color_line->cached = 1;
+            rm_so = color_line->cached_rm_so = (pmatch[0].rm_so + offset);
+            rm_eo = color_line->cached_rm_eo = (pmatch[0].rm_eo + offset);
+          }
+        }
+      }
+
+      if (has_reg_match)
+      {
+        if (!found)
+        {
+          /* Abort if we fill up chunks.
+           * Yes, this really happened. See #3888 */
+          if (lineInfo[n].chunks == SHRT_MAX)
+            break;
+          lineInfo[n].chunks++;
+          if (lineInfo[n].chunks > line_allocated_chunks)
+          {
+            line_allocated_chunks = lineInfo[n].chunks;
+            safe_realloc (&(lineInfo[n].syntax),
+                          line_allocated_chunks * sizeof (struct syntax_t));
+          }
+        }
+        i = lineInfo[n].chunks - 1;
+        if (!found ||
+            rm_so < (lineInfo[n].syntax)[i].first ||
+            (rm_so == (lineInfo[n].syntax)[i].first &&
+             rm_eo > (lineInfo[n].syntax)[i].last))
+        {
+          (lineInfo[n].syntax)[i].color = color_line->color;
+          (lineInfo[n].syntax)[i].first = rm_so;
+          (lineInfo[n].syntax)[i].last = rm_eo;
+        }
+        found = 1;
+      }
+      /* Once a regexp fails to match, don't try matching it again.
+       * On very long lines this can cause a performance issue if there
+       * are other regexps that have many matches. */
+      else
+      {
+        color_line->stop_matching = 1;
+        color_line->cached = 0;
+      }
+      color_line = color_line->next;
+    }
+
+    if (found)
+    {
+      /* Skip empty matches */
+      if ((lineInfo[n].syntax)[i].first == (lineInfo[n].syntax)[i].last)
+      {
+        lineInfo[n].chunks--;
+        offset = (lineInfo[n].syntax)[i].last + 1;
+      }
+      else
+        offset = (lineInfo[n].syntax)[i].last;
+
+      /* Remove cached matches that aren't later in the buffer */
+      for (color_line = color_list; color_line; color_line = color_line->next)
+        if (color_line->cached && color_line->cached_rm_so < offset)
+          color_line->cached = 0;
+    }
+  } while (found);
+
+  if (has_nl)
+    buf[buflen - 1] = '\n';
+}
+
+static void
 resolve_types (char *buf, char *raw, struct line_t *lineInfo, int n, int last,
                struct q_class_t **QuoteList, int *q_level, int *force_redraw,
                int q_classify)
 {
-  COLOR_LINE *color_line, *color_list;
+  COLOR_LINE *color_line;
   regmatch_t pmatch[1];
-  int found, offset, null_rx, i;
+  int i;
 
   if (n == 0 || ISHEADER (lineInfo[n-1].type) ||
       (check_protected_header_marker (raw) == 0))
@@ -812,7 +947,7 @@ resolve_types (char *buf, char *raw, struct line_t *lineInfo, int n, int last,
           if (REGEXEC (color_line->rx, buf) == 0)
           {
             lineInfo[n].type = MT_COLOR_HEADER;
-            lineInfo[n].syntax[0].color = color_line->pair;
+            lineInfo[n].syntax[0].color = color_line->color;
             if (lineInfo[n].is_cont_hdr)
             {
               /* adjust the previous continuation lines to reflect the color of this continuation line */
@@ -872,95 +1007,6 @@ resolve_types (char *buf, char *raw, struct line_t *lineInfo, int n, int last,
   }
   else
     lineInfo[n].type = MT_COLOR_NORMAL;
-
-  /* body patterns */
-  if (lineInfo[n].type == MT_COLOR_NORMAL ||
-      lineInfo[n].type == MT_COLOR_QUOTED ||
-      (lineInfo[n].type == MT_COLOR_HDEFAULT && option (OPTHEADERCOLORPARTIAL)))
-  {
-    size_t nl;
-
-    /* don't consider line endings part of the buffer
-     * for regex matching */
-    if ((nl = mutt_strlen (buf)) > 0 && buf[nl-1] == '\n')
-      buf[nl-1] = 0;
-
-    i = 0;
-    offset = 0;
-    lineInfo[n].chunks = 0;
-    if (lineInfo[n].type == MT_COLOR_HDEFAULT)
-      color_list = ColorHdrList;
-    else
-      color_list = ColorBodyList;
-    color_line = color_list;
-    while (color_line)
-    {
-      color_line->stop_matching = 0;
-      color_line = color_line->next;
-    }
-    do
-    {
-      if (!buf[offset])
-	break;
-
-      found = 0;
-      null_rx = 0;
-      color_line = color_list;
-      while (color_line)
-      {
-	if (!color_line->stop_matching &&
-            regexec (&color_line->rx, buf + offset, 1, pmatch,
-		     (offset ? REG_NOTBOL : 0)) == 0)
-	{
-	  if (pmatch[0].rm_eo != pmatch[0].rm_so)
-	  {
-	    if (!found)
-	    {
-              /* Abort if we fill up chunks.
-               * Yes, this really happened. See #3888 */
-              if (lineInfo[n].chunks == SHRT_MAX)
-              {
-                null_rx = 0;
-                break;
-              }
-	      if (++(lineInfo[n].chunks) > 1)
-		safe_realloc (&(lineInfo[n].syntax),
-			      (lineInfo[n].chunks) * sizeof (struct syntax_t));
-	    }
-	    i = lineInfo[n].chunks - 1;
-	    pmatch[0].rm_so += offset;
-	    pmatch[0].rm_eo += offset;
-	    if (!found ||
-		pmatch[0].rm_so < (lineInfo[n].syntax)[i].first ||
-		(pmatch[0].rm_so == (lineInfo[n].syntax)[i].first &&
-		 pmatch[0].rm_eo > (lineInfo[n].syntax)[i].last))
-	    {
-	      (lineInfo[n].syntax)[i].color = color_line->pair;
-	      (lineInfo[n].syntax)[i].first = pmatch[0].rm_so;
-	      (lineInfo[n].syntax)[i].last = pmatch[0].rm_eo;
-	    }
-	    found = 1;
-	    null_rx = 0;
-	  }
-	  else
-	    null_rx = 1; /* empty regexp; don't add it, but keep looking */
-	}
-        /* Once a regexp fails to match, don't try matching it again.
-         * On very long lines this can cause a performance issue if there
-         * are other regexps that have many matches. */
-        else
-          color_line->stop_matching = 1;
-	color_line = color_line->next;
-      }
-
-      if (null_rx)
-	offset++; /* avoid degenerate cases */
-      else
-	offset = (lineInfo[n].syntax)[i].last;
-    } while (found || null_rx);
-    if (nl > 0)
-      buf[nl] = '\n';
-  }
 }
 
 static int is_ansi (const char *buf)
@@ -1001,6 +1047,8 @@ static int grok_ansi(unsigned char *buf, int pos, ansi_attr *a)
     {
       a->attr = ANSI_OFF;
       a->pair = -1;
+      a->fg = -1;
+      a->bg = -1;
     }
     while (pos < x)
     {
@@ -1028,16 +1076,34 @@ static int grok_ansi(unsigned char *buf, int pos, ansi_attr *a)
       {
 	a->attr = ANSI_OFF;
 	a->pair = -1;
+        a->fg = -1;
+        a->bg = -1;
 	pos += 2;
       }
-      else if (buf[pos] == '3' && isdigit(buf[pos+1]))
+      else if (mutt_strncmp("38;5;", (char *)&buf[pos], 5) == 0 && isdigit(buf[pos+5]))
+      {
+	char *end;
+	a->pair = -1;
+	a->attr |= ANSI_COLOR;
+	a->fg = (int)strtoul((char *)&buf[pos+5], &end, 10);
+	pos += end - (char *)&buf[pos];
+      }
+      else if (buf[pos] == '3' && isdigit(buf[pos+1]) && buf[pos+1] != '8')
       {
 	a->pair = -1;
 	a->attr |= ANSI_COLOR;
 	a->fg = buf[pos+1] - '0';
 	pos += 3;
       }
-      else if (buf[pos] == '4' && isdigit(buf[pos+1]))
+      else if (mutt_strncmp("48;5;", (char *)&buf[pos], 5) == 0 && isdigit(buf[pos+5]))
+      {
+	char *end;
+	a->pair = -1;
+	a->attr |= ANSI_COLOR;
+	a->bg = (int)strtoul((char *)&buf[pos+5], &end, 10);
+	pos += end - (char *)&buf[pos];
+      }
+      else if (buf[pos] == '4' && isdigit(buf[pos+1]) && buf[pos+1] != '8')
       {
 	a->pair = -1;
 	a->attr |= ANSI_COLOR;
@@ -1113,7 +1179,7 @@ fill_buffer (FILE *f, LOFF_T *last_pos, LOFF_T offset, unsigned char **buf,
   if (*buf_ready == 0)
   {
     if (offset != *last_pos)
-      fseeko (f, offset, 0);
+      fseeko (f, offset, SEEK_SET);
 
     if ((*buf = (unsigned char *) mutt_read_line ((char *) *buf, blen, f,
                                                   NULL, MUTT_EOL)) == NULL)
@@ -1137,6 +1203,70 @@ fill_buffer (FILE *f, LOFF_T *last_pos, LOFF_T offset, unsigned char **buf,
   return b_read;
 }
 
+/* These are patterns left until the MUTT_SHOWCOLOR stage.
+ * They are separated from resolve_types() to make operations that jump
+ * further down (e.g. <bottom> and <search>)) faster.
+ */
+static int resolve_show_patterns (FILE *f, LOFF_T *last_pos, struct line_t *lineInfo,
+                                  int n, char *fmt, struct q_class_t **QuoteList,
+                                  int *q_level, int *force_redraw)
+{
+  char *tmp_buf = NULL, *tmp_fmt = NULL;
+  size_t tmp_buflen = 0;
+  int tmp_buf_ready = 0, m, rc = -1;;
+  regmatch_t pmatch[1];
+
+  /* If it's a continuation, we need to perform quote and body_pattern
+   * matching on the original line.  append_line() conveniently stores
+   * that information in the syntax[0].first field.
+   */
+  if (lineInfo[n].continuation)
+  {
+    m = (lineInfo[n].syntax)[0].first;
+    if (lineInfo[m].show_patterns_done == 1)
+      goto done;
+    if (fill_buffer (f, last_pos, lineInfo[m].offset, (unsigned char **) &tmp_buf,
+                     (unsigned char **) &tmp_fmt, &tmp_buflen, &tmp_buf_ready) < 0)
+    {
+      goto bail;
+    }
+  }
+  else
+  {
+    m = n;
+    tmp_fmt = fmt;
+  }
+
+  if (lineInfo[m].type == MT_COLOR_NORMAL ||
+      lineInfo[m].type == MT_COLOR_QUOTED ||
+      (lineInfo[m].type == MT_COLOR_HDEFAULT && option (OPTHEADERCOLORPARTIAL)))
+  {
+    match_body_patterns (tmp_fmt, lineInfo, m);
+  }
+
+  if ((lineInfo[m].type == MT_COLOR_QUOTED) &&
+      (lineInfo[m].quote == NULL))
+  {
+    regexec ((regex_t *) QuoteRegexp.rx, tmp_fmt, 1, pmatch, 0);
+    lineInfo[m].quote = classify_quote (QuoteList,
+                                        tmp_fmt + pmatch[0].rm_so,
+                                        pmatch[0].rm_eo - pmatch[0].rm_so,
+                                        force_redraw, q_level);
+  }
+
+done:
+  lineInfo[n].show_patterns_done = 1;
+  rc = 0;
+
+bail:
+  if (lineInfo[n].continuation)
+  {
+    FREE (&tmp_buf);
+    FREE (&tmp_fmt);
+  }
+
+  return rc;
+}
 
 static int format_line (struct line_t **lineInfo, int n, unsigned char *buf,
 			int flags, ansi_attr *pa, int cnt,
@@ -1144,15 +1274,25 @@ static int format_line (struct line_t **lineInfo, int n, unsigned char *buf,
                         mutt_window_t *pager_window)
 {
   int space = -1; /* index of the last space or TAB */
-  int col = option (OPTMARKERS) ? (*lineInfo)[n].continuation : 0;
+  int col;
   size_t k;
   int ch, vch, last_special = -1, special = 0, t;
   wchar_t wc;
   mbstate_t mbstate;
-  int wrap_cols = mutt_window_wrap_cols (pager_window, (flags & MUTT_PAGER_NOWRAP) ? 0 : Wrap);
+  int wrap_cols;
 
-  if (check_attachment_marker ((char *)buf) == 0)
+  if ((flags & MUTT_PAGER_NOWRAP) ||
+      (check_attachment_marker ((char *)buf) == 0))
     wrap_cols = pager_window->cols;
+  else
+    wrap_cols = mutt_window_wrap_cols (pager_window, Wrap);
+
+  if (option (OPTMARKERS) &&
+      (*lineInfo)[n].continuation &&
+      (wrap_cols > 1))
+    col = 1;
+  else
+    col = 0;
 
   /* FIXME: this should come from lineInfo */
   memset(&mbstate, 0, sizeof(mbstate));
@@ -1197,7 +1337,7 @@ static int format_line (struct line_t **lineInfo, int n, unsigned char *buf,
 
     if (Charset_is_utf8)
     {
-      if (wc == 0x200B || wc == 0xFEFF)
+      if (wc == 0x200B || wc == 0x200C || wc == 0xFEFF)
       {
 	dprint (3, (debugfile, "skip zero-width character U+%04X\n", (unsigned short)wc));
 	continue;
@@ -1254,7 +1394,7 @@ static int format_line (struct line_t **lineInfo, int n, unsigned char *buf,
 	((flags & (MUTT_SHOWCOLOR | MUTT_SEARCH | MUTT_PAGER_MARKER)) ||
 	 special || last_special || pa->attr))
     {
-      resolve_color (*lineInfo, n, vch, flags, special, pa);
+      resolve_color (*lineInfo, n, vch, flags, special, pa, wrap_cols);
       last_special = special;
     }
 
@@ -1345,10 +1485,10 @@ display_line (FILE *f, LOFF_T *last_pos, struct line_t **lineInfo, int n,
   int buf_ready = 0, change_last = 0;
   int special;
   int offset;
-  int def_color;
+  COLOR_ATTR def_color;
   int m;
   int rc = -1;
-  ansi_attr a = {0,0,0,-1};
+  ansi_attr a = {0,-1,-1,-1};
   regmatch_t pmatch[1];
 
   if (n == *last)
@@ -1396,27 +1536,27 @@ display_line (FILE *f, LOFF_T *last_pos, struct line_t **lineInfo, int n,
       flags = 0; /* MUTT_NOSHOW */
   }
 
-  /* At this point, (*lineInfo[n]).quote may still be undefined. We
-   * don't want to compute it every time MUTT_TYPES is set, since this
-   * would slow down the "bottom" function unacceptably. A compromise
-   * solution is hence to call regexec() again, just to find out the
-   * length of the quote prefix.
-   */
-  if ((flags & MUTT_SHOWCOLOR) && !(*lineInfo)[n].continuation &&
-      (*lineInfo)[n].type == MT_COLOR_QUOTED && (*lineInfo)[n].quote == NULL)
+  if ((flags & MUTT_SHOWCOLOR) &&
+      !(*lineInfo)[n].show_patterns_done)
   {
-    if (fill_buffer (f, last_pos, (*lineInfo)[n].offset, &buf, &fmt, &buflen, &buf_ready) < 0)
+    if (!(*lineInfo)[n].continuation)
+    {
+      if (fill_buffer (f, last_pos, (*lineInfo)[n].offset, &buf, &fmt, &buflen,
+                       &buf_ready) < 0)
+      {
+        if (change_last)
+          (*last)--;
+        goto out;
+      }
+    }
+
+    if (resolve_show_patterns (f, last_pos, *lineInfo, n, (char *)fmt,
+                               QuoteList, q_level, force_redraw) < 0)
     {
       if (change_last)
-	(*last)--;
+        (*last)--;
       goto out;
     }
-    regexec ((regex_t *) QuoteRegexp.rx, (char *) fmt, 1, pmatch, 0);
-    (*lineInfo)[n].quote =
-      classify_quote (QuoteList,
-                      (char *) fmt + pmatch[0].rm_so,
-                      pmatch[0].rm_eo - pmatch[0].rm_so,
-                      force_redraw, q_level);
   }
 
   if ((flags & MUTT_SEARCH) && !(*lineInfo)[n].continuation && (*lineInfo)[n].search_cnt == -1)
@@ -1538,7 +1678,7 @@ display_line (FILE *f, LOFF_T *last_pos, struct line_t **lineInfo, int n,
       a.attr ||
       (col != pager_window->cols && (flags & (MUTT_SHOWCOLOR | MUTT_SEARCH))))
   {
-    resolve_color (*lineInfo, n, vch, flags, 0, &a);
+    resolve_color (*lineInfo, n, vch, flags, 0, &a, 0);
   }
 
   /*
@@ -1787,9 +1927,11 @@ static void pager_menu_redraw (MUTTMENU *pager_menu)
       {
         rd->lineInfo[i].offset = 0;
         rd->lineInfo[i].type = -1;
-        rd->lineInfo[i].continuation = 0;
         rd->lineInfo[i].chunks = 0;
         rd->lineInfo[i].search_cnt = -1;
+        rd->lineInfo[i].continuation = 0;
+        rd->lineInfo[i].is_cont_hdr = 0;
+        rd->lineInfo[i].show_patterns_done = 0;
         rd->lineInfo[i].quote = NULL;
 
         safe_realloc (&(rd->lineInfo[i].syntax),
@@ -2019,6 +2161,44 @@ mutt_pager (const char *banner, const char *fname, int flags, pager_t *extra)
   {
     mutt_curs_set (0);
 
+#if defined (USE_SLANG_CURSES) || defined (HAVE_RESIZETERM)
+    if (SigWinch)
+    {
+      do
+      {
+        SigWinch = 0;
+        mutt_resize_screen ();
+      }
+      while (SigWinch);
+
+      clearok(stdscr,TRUE);/*force complete redraw*/
+
+      if (flags & MUTT_PAGER_RETWINCH)
+      {
+        /* A SigWinch could occur while in the RETWINCH handler, so
+         * just keep the previously stored values */
+        if (!Resize)
+        {
+          /* Store current position. */
+          rd.lines = -1;
+          for (i = 0; i <= rd.topline; i++)
+            if (!rd.lineInfo[i].continuation)
+              rd.lines++;
+
+          Resize = safe_malloc (sizeof (struct resize));
+
+          Resize->line = rd.lines;
+          Resize->SearchCompiled = rd.SearchCompiled;
+          Resize->SearchBack = rd.SearchBack;
+        }
+
+	ch = -1;
+	rc = OP_REFORMAT_WINCH;
+        continue;
+      }
+    }
+#endif
+
     pager_menu_redraw (pager_menu);
 
     if (option(OPTBRAILLEFRIENDLY))
@@ -2045,40 +2225,6 @@ mutt_pager (const char *banner, const char *fname, int flags, pager_t *extra)
     }
     else
       OldHdr = NULL;
-
-#if defined (USE_SLANG_CURSES) || defined (HAVE_RESIZETERM)
-    if (SigWinch)
-    {
-      SigWinch = 0;
-      mutt_resize_screen ();
-      clearok(stdscr,TRUE);/*force complete redraw*/
-
-      if (flags & MUTT_PAGER_RETWINCH)
-      {
-        /* Store current position. */
-        rd.lines = -1;
-        for (i = 0; i <= rd.topline; i++)
-          if (!rd.lineInfo[i].continuation)
-            rd.lines++;
-
-	Resize = safe_malloc (sizeof (struct resize));
-
-	Resize->line = rd.lines;
-	Resize->SearchCompiled = rd.SearchCompiled;
-	Resize->SearchBack = rd.SearchBack;
-
-	ch = -1;
-	rc = OP_REFORMAT_WINCH;
-      }
-      else
-      {
-        /* note: mutt_resize_screen() -> mutt_reflow_windows() sets
-         * REDRAW_FULL and REDRAW_FLOW */
-	ch = 0;
-      }
-      continue;
-    }
-#endif
 
     ch = km_dokey (MENU_PAGER);
     if (ch >= 0)
@@ -2327,7 +2473,7 @@ search_next:
 	  /* update the search pointers */
 	  i = 0;
 	  while (display_line (rd.fp, &rd.last_pos, &rd.lineInfo, i, &rd.lastLine,
-                               &rd.maxLine, MUTT_SEARCH | (flags & MUTT_PAGER_NSKIP) | (flags & MUTT_PAGER_NOWRAP),
+                               &rd.maxLine, MUTT_SEARCH | (flags & MUTT_PAGER_NSKIP) | (flags & MUTT_PAGER_NOWRAP) | rd.has_types,
                                &rd.QuoteList, &rd.q_level,
                                &rd.force_redraw, &rd.SearchRE, rd.pager_window) == 0)
 	    i++;
@@ -2403,7 +2549,6 @@ search_next:
 	{
 	  InHelp = 1;
 	  mutt_help (MENU_PAGER);
-	  pager_menu->redraw = REDRAW_FULL;
 	  InHelp = 0;
 	}
 	else
@@ -2412,7 +2557,6 @@ search_next:
 
       case OP_ERROR_HISTORY:
         mutt_error_history_display ();
-        pager_menu->redraw = REDRAW_FULL;
         break;
 
       case OP_PAGER_HIDE_QUOTED:
@@ -2431,17 +2575,81 @@ search_next:
 	{
 	  int dretval = 0;
 	  int new_topline = rd.topline;
+	  int num_quoted = 0;
 
-	  while ((new_topline < rd.lastLine ||
-		  (0 == (dretval = display_line (rd.fp, &rd.last_pos, &rd.lineInfo,
-			 new_topline, &rd.lastLine, &rd.maxLine, MUTT_TYPES | (flags & MUTT_PAGER_NOWRAP),
-                         &rd.QuoteList, &rd.q_level, &rd.force_redraw, &rd.SearchRE, rd.pager_window))))
-		 && rd.lineInfo[new_topline].type != MT_COLOR_QUOTED)
-	    new_topline++;
+          if (PagerSkipQuotedContext < 0)
+            PagerSkipQuotedContext = 0;
 
-	  if (dretval < 0)
-	  {
-	    mutt_error _("No more quoted text.");
+          /* Skip past previous "context" quoted lines */
+          if (PagerSkipQuotedContext > 0)
+          {
+	    while ((new_topline < rd.lastLine ||
+		    (0 == (dretval = display_line (rd.fp, &rd.last_pos, &rd.lineInfo,
+			   new_topline, &rd.lastLine, &rd.maxLine, MUTT_TYPES | (flags & MUTT_PAGER_NOWRAP),
+			   &rd.QuoteList, &rd.q_level, &rd.force_redraw, &rd.SearchRE, rd.pager_window))))
+		   && rd.lineInfo[new_topline].type == MT_COLOR_QUOTED)
+	    {
+	      new_topline++;
+	      num_quoted++;
+	    }
+
+	    if (dretval < 0)
+	    {
+	      mutt_error _("No more unquoted text after quoted text.");
+	      break;
+	    }
+          }
+
+          if (num_quoted <= PagerSkipQuotedContext)
+          {
+	    num_quoted = 0;
+	    while ((new_topline < rd.lastLine ||
+		    (0 == (dretval = display_line (rd.fp, &rd.last_pos, &rd.lineInfo,
+			   new_topline, &rd.lastLine, &rd.maxLine, MUTT_TYPES | (flags & MUTT_PAGER_NOWRAP),
+			   &rd.QuoteList, &rd.q_level, &rd.force_redraw, &rd.SearchRE, rd.pager_window))))
+		   && rd.lineInfo[new_topline].type != MT_COLOR_QUOTED)
+	      new_topline++;
+
+	    if (dretval < 0)
+	    {
+	      mutt_error _("No more quoted text.");
+	      break;
+	    }
+
+	    while ((new_topline < rd.lastLine ||
+		    (0 == (dretval = display_line (rd.fp, &rd.last_pos, &rd.lineInfo,
+			   new_topline, &rd.lastLine, &rd.maxLine, MUTT_TYPES | (flags & MUTT_PAGER_NOWRAP),
+			   &rd.QuoteList, &rd.q_level, &rd.force_redraw, &rd.SearchRE, rd.pager_window))))
+		   && rd.lineInfo[new_topline].type == MT_COLOR_QUOTED)
+	    {
+	      new_topline++;
+	      num_quoted++;
+	    }
+
+	    if (dretval < 0)
+	    {
+	      mutt_error _("No more unquoted text after quoted text.");
+	      break;
+	    }
+	  }
+
+	  rd.topline = new_topline - MIN (PagerSkipQuotedContext, num_quoted);
+	}
+	break;
+
+      case OP_PAGER_SKIP_HEADERS:
+	if (rd.has_types)
+	{
+	  int dretval = 0;
+	  int new_topline = rd.topline;
+
+          if (!ISHEADER (rd.lineInfo[new_topline].type))
+          {
+            /* L10N:
+               Displayed if <skip-headers> is invoked in the pager, but we are
+               already past the headers
+            */
+	    mutt_error _("Already skipped past headers.");
 	    break;
 	  }
 
@@ -2449,12 +2657,18 @@ search_next:
 		  (0 == (dretval = display_line (rd.fp, &rd.last_pos, &rd.lineInfo,
 			 new_topline, &rd.lastLine, &rd.maxLine, MUTT_TYPES | (flags & MUTT_PAGER_NOWRAP),
                          &rd.QuoteList, &rd.q_level, &rd.force_redraw, &rd.SearchRE, rd.pager_window))))
-		 && rd.lineInfo[new_topline].type == MT_COLOR_QUOTED)
+		 && ISHEADER (rd.lineInfo[new_topline].type))
 	    new_topline++;
 
 	  if (dretval < 0)
 	  {
-	    mutt_error _("No more unquoted text after quoted text.");
+            /* L10N:
+               Displayed if <skip-headers> is invoked in the pager, but there is
+               no text past the headers.
+               (I don't think this is actually possible in Mutt's code, but
+               display some kind of message in case it somehow occurs.)
+            */
+	    mutt_error _("No text past headers.");
 	    break;
 	  }
 	  rd.topline = new_topline;
@@ -2509,7 +2723,6 @@ search_next:
 			      extra->actx, extra->bdy);
         else
 	  mutt_resend_message (NULL, extra->ctx, extra->hdr);
-        pager_menu->redraw = REDRAW_FULL;
         break;
 
       case OP_CHECK_TRADITIONAL:
@@ -2532,7 +2745,6 @@ search_next:
 	else
 	  mutt_send_message (SENDTOSENDER | SENDBACKGROUNDEDIT,
                              NULL, NULL, extra->ctx, extra->hdr);
-	pager_menu->redraw = REDRAW_FULL;
 	break;
 
       case OP_CREATE_ALIAS:
@@ -2680,8 +2892,8 @@ search_next:
       case OP_MAIL:
 	CHECK_MODE(IsHeader (extra) && !IsAttach (extra));
         CHECK_ATTACH;
-	mutt_send_message (SENDBACKGROUNDEDIT, NULL, NULL, extra->ctx, NULL);
-	pager_menu->redraw = REDRAW_FULL;
+	mutt_send_message (SENDBACKGROUNDEDIT | SENDCHECKPOSTPONED, NULL, NULL,
+                           extra->ctx, NULL);
 	break;
 
       case OP_REPLY:
@@ -2704,16 +2916,19 @@ search_next:
 			     extra->bdy, replyflags);
 	else
 	  mutt_send_message (replyflags, NULL, NULL, extra->ctx, extra->hdr);
-	pager_menu->redraw = REDRAW_FULL;
 	break;
       }
+
+      case OP_LIST_ACTION:
+        if (IsHeader(extra))
+          mutt_list_menu (Context, extra->hdr);
+        break;
 
       case OP_RECALL_MESSAGE:
 	CHECK_MODE(IsHeader (extra) && !IsAttach(extra));
         CHECK_ATTACH;
 	mutt_send_message (SENDPOSTPONED | SENDBACKGROUNDEDIT,
                            NULL, NULL, extra->ctx, NULL);
-	pager_menu->redraw = REDRAW_FULL;
 	break;
 
       case OP_FORWARD_MESSAGE:
@@ -2725,7 +2940,6 @@ search_next:
         else
 	  mutt_send_message (SENDFORWARD | SENDBACKGROUNDEDIT,
                              NULL, NULL, extra->ctx, extra->hdr);
-	pager_menu->redraw = REDRAW_FULL;
 	break;
 
       case OP_DECRYPT_SAVE:
@@ -2874,7 +3088,6 @@ search_next:
 	mutt_view_attachments (extra->hdr);
 	if (extra->hdr->attach_del)
 	  Context->changed = 1;
-	pager_menu->redraw = REDRAW_FULL;
 	break;
 
       case OP_EDIT_LABEL:
@@ -2901,7 +3114,6 @@ search_next:
 	CHECK_MODE(IsHeader(extra));
         CHECK_ATTACH;
 	mutt_send_message (SENDKEY, NULL, NULL, extra->ctx, NULL);
-	pager_menu->redraw = REDRAW_FULL;
 	break;
 
 
@@ -2993,6 +3205,10 @@ search_next:
   FREE (&rd.index_window);
   FREE (&rd.pager_status_window);
   FREE (&rd.pager_window);
+
+#ifdef HAVE_COLOR
+  mutt_free_all_ansi_colors ();
+#endif
 
   return (rc != -1 ? rc : 0);
 }

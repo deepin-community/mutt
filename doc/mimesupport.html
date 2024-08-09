@@ -116,7 +116,46 @@ and the <code class="literal">&lt;reply&gt;</code> and
 </p><p>
 See table <a class="xref" href="reference.html#tab-attachment-bindings" title="Table 9.7. Default Attachment Menu Bindings">Table 9.7, “Default Attachment Menu Bindings”</a> for all available
 functions.
-</p></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="compose-menu"></a>1.4. The Compose Menu</h3></div></div></div><p>
+</p><div class="sect3"><div class="titlepage"><div><div><h4 class="title"><a id="attach-viewers"></a>1.3.1. Viewing Attachments</h4></div></div></div><p>
+There are four(!) ways of viewing attachments, so the functions
+deserve some extra explanation.
+</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+      <code class="literal">&lt;view-mailcap&gt;</code>
+      (default keybinding: m)
+    </span></dt><dd><p>
+        This will use the first matching mailcap entry.
+      </p><p>
+        If no matching mailcap entries are found, it will abort with an
+        error message.
+      </p></dd><dt><span class="term">
+      <code class="literal">&lt;view-attach&gt;</code>
+      (default keybinding: &lt;Enter&gt;)
+    </span></dt><dd><p>
+        Mutt will display internally supported MIME types (see <a class="xref" href="mimesupport.html#mime-pager" title="1.2. Viewing MIME Messages in the Pager">Section 1.2, “Viewing MIME Messages in the Pager”</a>) in the pager.  This will respect
+        <a class="link" href="mimesupport.html#auto-view" title="4. MIME Autoview">auto_view</a> settings, to determine
+        whether to use a <code class="literal">copiousoutput</code> mailcap entry or
+        just directly display the attachment.
+      </p><p>
+        Other MIME types will use the first matching mailcap entry.
+      </p><p>
+        If no matching mailcap entries are found, the attachment will
+        be displayed in the pager as raw text.
+      </p></dd><dt><span class="term">
+      <code class="literal">&lt;view-pager&gt;</code>
+    </span></dt><dd><p>
+        Mutt will use the first matching
+        <code class="literal">copiousoutput</code> mailcap entry to display the
+        attachment in the pager (regardless of <a class="link" href="mimesupport.html#auto-view" title="4. MIME Autoview">auto_view</a> settings).
+      </p><p>
+        If no matching mailcap entries are found, the attachment will
+        be displayed in the pager as raw text.
+      </p></dd><dt><span class="term">
+      <code class="literal">&lt;view-text&gt;</code>
+      (default keybinding: T)
+    </span></dt><dd><p>
+        The attachment will always be displayed in the pager as raw
+        text.
+      </p></dd></dl></div></div></div><div class="sect2"><div class="titlepage"><div><div><h3 class="title"><a id="compose-menu"></a>1.4. The Compose Menu</h3></div></div></div><p>
 The compose menu is the menu you see before you send a message.  It
 allows you to edit the recipient list, the subject, and other aspects of
 your message.  It also contains a list of the attachments of your
@@ -149,7 +188,7 @@ list of available expandos to format this display to your needs.
 To get most out of MIME, it's important that a MIME part's content type
 matches the content as closely as possible so that the recipient's
 client can automatically select the right viewer for the
-content. However, there's no reliable for Mutt to know how to detect
+content. However, there's no reliable way for Mutt to know how to detect
 every possible file type. Instead, it uses a simple plain text mapping
 file that specifies what file extension corresponds to what MIME
 type. This file is called <code class="literal">mime.types</code>.
@@ -174,7 +213,7 @@ to use.
 </p><p>
 If Mutt can not determine the MIME type by the extension of the file you
 attach, it will run the command specified in
-<a class="link" href="reference.html#mime-type-query-command" title="3.190. mime_type_query_command">$mime_type_query_command</a>.
+<a class="link" href="reference.html#mime-type-query-command" title="3.194. mime_type_query_command">$mime_type_query_command</a>.
 If that command is not specified, Mutt will look at the file.  If the file
 is free of binary information, Mutt will assume that the file is plain text,
 and mark it as <code class="literal">text/plain</code>.  If the file contains binary
@@ -289,7 +328,7 @@ text/*; more
 The interpretation of shell meta-characters embedded in MIME parameters
 can lead to security problems in general.  Mutt tries to quote
 parameters in expansion of <code class="literal">%s</code> syntaxes properly, and
-avoids risky characters by substituting them, see the <a class="link" href="reference.html#mailcap-sanitize" title="3.165. mailcap_sanitize">$mailcap_sanitize</a> variable.
+avoids risky characters by substituting them, see the <a class="link" href="reference.html#mailcap-sanitize" title="3.168. mailcap_sanitize">$mailcap_sanitize</a> variable.
 </p><p>
 Although Mutt's procedures to invoke programs with mailcap seem to be
 safe, there are other applications parsing mailcap, maybe taking less
@@ -342,9 +381,9 @@ entries with this flag will be considered a handler for a MIME type
 — all other entries will be ignored.
 </p></dd><dt><span class="term">needsterminal</span></dt><dd><p>
 Mutt uses this flag when viewing attachments with <a class="link" href="mimesupport.html#auto-view" title="4. MIME Autoview"><span class="command"><strong>auto_view</strong></span></a>, in order to
-decide whether it should honor the setting of the <a class="link" href="reference.html#wait-key" title="3.403. wait_key">$wait_key</a> variable or not.  When an attachment
+decide whether it should honor the setting of the <a class="link" href="reference.html#wait-key" title="3.411. wait_key">$wait_key</a> variable or not.  When an attachment
 is viewed using an interactive program, and the corresponding mailcap
-entry has a <span class="emphasis"><em>needsterminal</em></span> flag, Mutt will use <a class="link" href="reference.html#wait-key" title="3.403. wait_key">$wait_key</a> and the exit status of the program
+entry has a <span class="emphasis"><em>needsterminal</em></span> flag, Mutt will use <a class="link" href="reference.html#wait-key" title="3.411. wait_key">$wait_key</a> and the exit status of the program
 to decide if it will ask you to press a key after the external program
 has exited.  In all other situations it will not prompt you for a key.
 </p></dd><dt><span class="term">compose=&lt;command&gt;</span></dt><dd><p>
@@ -362,7 +401,7 @@ Mutt supports this from the attachment and compose menus.
 </p></dd><dt><span class="term">edit=&lt;command&gt;</span></dt><dd><p>
 This flag specifies the command to use to edit a specific MIME type.
 Mutt supports this from the compose menu, and also uses it to compose
-new attachments.  Mutt will default to the defined <a class="link" href="reference.html#editor" title="3.83. editor">$editor</a> for text attachments.
+new attachments.  Mutt will default to the defined <a class="link" href="reference.html#editor" title="3.85. editor">$editor</a> for text attachments.
 </p></dd><dt><span class="term">nametemplate=&lt;template&gt;</span></dt><dd><p>
 This field specifies the format for the file denoted by
 <code class="literal">%s</code> in the command fields.  Certain programs will
@@ -582,7 +621,10 @@ alternative_order text/enriched text/plain text \
 </pre></li><li class="listitem"><p>
 Next, Mutt will check if any of the types have a defined <a class="link" href="mimesupport.html#auto-view" title="4. MIME Autoview"><span class="command"><strong>auto_view</strong></span></a>, and use that.
 </p></li><li class="listitem"><p>
-Failing that, Mutt will look for any text type.
+Failing that, Mutt will look first for
+<code class="literal">text/enriched</code>, followed by
+<code class="literal">text/plain</code>, and finally
+<code class="literal">text/html</code>.
 </p></li><li class="listitem"><p>
 As a last attempt, Mutt will look for any type it knows how to handle.
 </p></li></ol></div><p>
@@ -591,9 +633,9 @@ list, use the <span class="command"><strong>unalternative_order</strong></span> 
 </p><p>
 Generating <code class="literal">multipart/alternative</code> content is supported
 via the
-<a class="link" href="reference.html#send-multipart-alternative" title="3.296. send_multipart_alternative">$send_multipart_alternative</a>
+<a class="link" href="reference.html#send-multipart-alternative" title="3.301. send_multipart_alternative">$send_multipart_alternative</a>
 quadoption and
-<a class="link" href="reference.html#send-multipart-alternative-filter" title="3.297. send_multipart_alternative_filter">$send_multipart_alternative_filter</a>
+<a class="link" href="reference.html#send-multipart-alternative-filter" title="3.302. send_multipart_alternative_filter">$send_multipart_alternative_filter</a>
 filter script.  The composed <code class="literal">text/plain</code> content
 will be piped to the filter script's stdin.  The output from the
 filter script should be the generated mime type of the content, a
@@ -607,11 +649,13 @@ Content in html format
 &lt;/body&gt;
 &lt;/html&gt;
 </pre><p>
-A preview of the alternative can be viewed in the compose menu using the functions
-<code class="literal">&lt;view-alt&gt;</code>,
-<code class="literal">&lt;view-alt-text&gt;</code> and
-<code class="literal">&lt;view-alt-mailcap&gt;</code>, bound to
-"v", "Esc v" and "V" by default.
+A preview of the alternative can be viewed in the compose menu using
+the functions <code class="literal">&lt;view-alt&gt;</code> (bound to
+"v"), <code class="literal">&lt;view-alt-text&gt;</code> (bound to
+"Esc v"), <code class="literal">&lt;view-alt-mailcap&gt;</code> (bound
+to "V"), and <code class="literal">&lt;view-alt-pager&gt;</code>
+(unbound).  See <a class="xref" href="mimesupport.html#attach-viewers" title="1.3.1. Viewing Attachments">Section 1.3.1, “Viewing Attachments”</a> for a discussion of
+the differences between these viewing functions.
 </p></div><div class="sect1"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="attachments"></a>6. Attachment Searching and Counting</h2></div></div></div><p>
 If you ever lose track of attachments in your mailboxes, Mutt's
 attachment-counting and -searching support might be for you.  You can
@@ -630,7 +674,7 @@ download the message just once.
 </p><p>
 By default, Mutt will not search inside
 <code class="literal">multipart/alternative</code> containers.  This can be
-changed via the <a class="link" href="reference.html#count-alternatives" title="3.52. count_alternatives">$count_alternatives</a> configuration
+changed via the <a class="link" href="reference.html#count-alternatives" title="3.54. count_alternatives">$count_alternatives</a> configuration
 variable.
 </p><p>
 The syntax is:
@@ -658,7 +702,7 @@ or <code class="literal">R</code> for <span class="emphasis"><em>disposition</em
 these as attachments.  If this first part is of type
 multipart/alternative, note that its top-level inline parts are also
 counted via <code class="literal">root</code> <span class="emphasis"><em>disposition</em></span>
-(if <a class="link" href="reference.html#count-alternatives" title="3.52. count_alternatives">$count_alternatives</a> is
+(if <a class="link" href="reference.html#count-alternatives" title="3.54. count_alternatives">$count_alternatives</a> is
 set).
 </p><p>
 Disposition is prefixed by either a <span class="quote">“<span class="quote">+</span>”</span> symbol or a

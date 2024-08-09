@@ -5,12 +5,12 @@ Subject: document_debian_defaults
 Some customization of the option which are straying
 from the default only on Debian systems.
 ---
- init.h | 22 ++++++++++++++++++++++
- 1 file changed, 22 insertions(+)
+ init.h |   19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
 
 --- a/init.h
 +++ b/init.h
-@@ -453,6 +453,9 @@
+@@ -561,6 +561,9 @@ struct option_t MuttVars[] = {
    ** .pp
    ** When this variable is \fIset\fP, mutt will include Delivered-To headers when
    ** bouncing messages.  Postfix users may wish to \fIunset\fP this variable.
@@ -20,7 +20,7 @@ from the default only on Debian systems.
    */
    { "braille_friendly", DT_BOOL, R_NONE, {.l=OPTBRAILLEFRIENDLY}, {.l=0} },
    /*
-@@ -1466,6 +1469,9 @@
+@@ -1600,6 +1603,9 @@ struct option_t MuttVars[] = {
    ** your muttrc.
    ** .pp
    ** Also see $$use_domain and $$hidden_host.
@@ -30,17 +30,17 @@ from the default only on Debian systems.
    */
  #if defined(HAVE_LIBIDN) || defined(HAVE_LIBIDN2)
    { "idn_decode",	DT_BOOL, R_MENU, {.l=OPTIDNDECODE}, {.l=1} },
-@@ -2165,6 +2171,9 @@
+@@ -2343,6 +2349,9 @@ struct option_t MuttVars[] = {
    ** system.  It is used with various sets of parameters to gather the
    ** list of known remailers, and to finally send a message through the
-   ** mixmaster chain.
+   ** mixmaster chain. (Mixmaster only)
 +  ** .pp
 +  ** \fBNote:\fP On Debian systems, this option is set by default to
 +  ** ``mixmaster-filter'' in /etc/Muttrc.
    */
  #endif
    { "move",		DT_QUAD, R_NONE, {.l=OPT_MOVE}, {.l=MUTT_NO} },
-@@ -3843,6 +3852,10 @@
+@@ -4094,6 +4103,10 @@ struct option_t MuttVars[] = {
    ** This is a format string, see the $$smime_decrypt_command command for
    ** possible \fCprintf(3)\fP-like sequences.
    ** (S/MIME only)
@@ -51,7 +51,7 @@ from the default only on Debian systems.
    */
  #ifdef USE_SMTP
    { "smtp_authenticators", DT_STR, R_NONE, {.p=&SmtpAuthenticators}, {.p=0} },
-@@ -4013,6 +4026,9 @@
+@@ -4312,6 +4325,9 @@ struct option_t MuttVars[] = {
    ** .ts
    ** set ssl_ca_certificates_file=/etc/ssl/certs/ca-certificates.crt
    ** .te
@@ -59,9 +59,9 @@ from the default only on Debian systems.
 +  ** \fBNote:\fP On Debian systems, this option is set by default to
 +  ** ``threads'' in /etc/Muttrc.
    */
- #endif /* USE_SSL_GNUTLS */
+ # endif /* USE_SSL_GNUTLS */
    { "ssl_client_cert", DT_PATH, R_NONE, {.p=&SslClientCert}, {.p=0} },
-@@ -4576,6 +4592,9 @@
+@@ -4885,6 +4901,9 @@ struct option_t MuttVars[] = {
    ** Note this option only affects the sending of messages.  Fcc'ed
    ** copies of a message will always contain the ``Bcc:'' header if
    ** one exists.
